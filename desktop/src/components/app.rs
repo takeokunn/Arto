@@ -239,9 +239,9 @@ pub fn App(
             if can_accept {
                 // Phase 2a: Commit - insert tab and send Ack
                 let tabs_len = state.tabs.read().len();
-                let target_pos = request.target_index.unwrap_or(tabs_len);
-                let insert_index = state.insert_tab(request.tab.clone(), target_pos);
-                state.switch_to_tab(insert_index);
+                let insert_index = request.target_index.unwrap_or(tabs_len);
+                let new_tab_index = state.insert_tab(request.tab.clone(), insert_index);
+                state.switch_to_tab(new_tab_index);
 
                 // Focus this window after receiving the tab
                 window().set_focus();
