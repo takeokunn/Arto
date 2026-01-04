@@ -11,7 +11,8 @@
 //! These methods are tested via:
 //! - Integration tests that run within a Dioxus app context
 //! - Manual testing through the UI
-//! - The Tab/TabContent tests cover the underlying data structures
+//! - The Tab/TabContent module tests cover the underlying data structures
+//!   (see `tabs/tab.rs` and `tabs/content.rs` for unit tests)
 
 use super::content::TabContent;
 use super::tab::Tab;
@@ -51,12 +52,22 @@ impl AppState {
 
     /// Close a tab at index.
     /// If no tabs remain, closes the window.
-    pub fn close_tab(&mut self, index: usize) {
+    ///
+    /// Returns `true` if the tab was closed successfully.
+    /// Returns `false` if the index was out of bounds.
+    ///
+    /// Note: When the last tab is closed, this method also closes the window.
+    /// The caller cannot distinguish between "tab closed" and "window closed"
+    /// from the return value alone.
+    pub fn close_tab(&mut self, index: usize) -> bool {
         if self.take_tab(index).is_some() {
             // Close window if no tabs remain
             if self.tabs.read().is_empty() {
                 dioxus::desktop::window().close();
             }
+            true
+        } else {
+            false
         }
     }
 

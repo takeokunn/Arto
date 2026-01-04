@@ -505,7 +505,10 @@ fn handle_drag_mouse_motion(state: AppState) {
     // Get current mouse position
     let (screen_x, screen_y) = match Mouse::get_mouse_position() {
         Mouse::Position { x, y } => (x as f64, y as f64),
-        Mouse::Error => return,
+        Mouse::Error => {
+            tracing::debug!("Failed to get mouse position during active drag");
+            return;
+        }
     };
 
     let Some(active) = drag::get_active_drag() else {
@@ -593,11 +596,15 @@ fn handle_drag_mouse_motion(state: AppState) {
 /// Handle mouse release during tab drag (called from DeviceEvent handler)
 ///
 /// Unified architecture: drop inserts tab into target_window_id (if set) or commits preview.
+///
+/// State transitions:
+/// - `DetachState::None` → Tab is in a window's tab bar, insert there
+/// - `DetachState::Pending` → Drag cancelled during debounce, restore tab
+/// - `DetachState::Creating` → Window creation in progress, cancel and restore
+/// - `DetachState::Detached` → Preview visible, commit as new window
 fn handle_drag_mouse_release(mut state: AppState) {
     use crate::drag::DetachState;
-    use crate::events::{
-        ActiveDragUpdate, TabTransferRequest, ACTIVE_DRAG_UPDATE, TAB_TRANSFER_REQUEST,
-    };
+    use crate::events::{ActiveDragUpdate, ACTIVE_DRAG_UPDATE};
 
     let Some(active) = drag::get_active_drag() else {
         return;
@@ -607,77 +614,16 @@ fn handle_drag_mouse_release(mut state: AppState) {
 
     match &active.detach_state {
         DetachState::None => {
-            // Cursor is in a window's tab bar - insert tab there
-            if let (Some(target_wid), Some(dragged)) =
-                (active.target_window_id, drag::get_dragged_tab())
-            {
-                let source_wid = dragged.source_window_id;
-                let current_wid = window().id();
-
-                if target_wid == current_wid {
-                    // Drop in current window (source)
-                    if is_single_tab {
-                        // Single-tab: tab already there, just restore window state
-                        crate::window::close_preview_window();
-                    } else {
-                        // Multi-tab: insert and switch to the tab
-                        let insert_index = state.insert_tab(dragged.tab, active.target_index);
-                        state.switch_to_tab(insert_index);
-                        crate::window::close_preview_window();
-                    }
-                } else {
-                    // Drop in another window - send transfer request
-                    let request = TabTransferRequest {
-                        source_window_id: source_wid,
-                        target_window_id: target_wid,
-                        tab: dragged.tab,
-                        target_index: Some(active.target_index),
-                        source_directory: state.directory.read().clone(),
-                        request_id: uuid::Uuid::new_v4(),
-                    };
-                    TAB_TRANSFER_REQUEST.send(request).ok();
-                    crate::window::main::focus_window(target_wid);
-
-                    if is_single_tab {
-                        // Single-tab: discard preview and close source window
-                        // (tab was never removed, so closing window cleans up)
-                        crate::window::discard_preview_window();
-                        window().close();
-                    } else {
-                        // Multi-tab: just close preview window
-                        crate::window::close_preview_window();
-                    }
-                }
-            }
+            handle_drop_in_tab_bar(&mut state, &active, is_single_tab);
         }
-
         DetachState::Pending { .. } => {
-            // Drag released during debounce - restore tab to source
-            if is_single_tab {
-                // Single-tab: tab already there, nothing to do
-            } else if let Some(dragged) = drag::get_dragged_tab() {
-                // Multi-tab: insert tab back
-                state.insert_tab(dragged.tab, dragged.source_index);
-            }
+            handle_drop_during_pending(&mut state, is_single_tab);
         }
-
         DetachState::Creating => {
-            // Window creation in progress - cancel and restore tab
-            crate::window::close_preview_window();
-            if !is_single_tab {
-                // Multi-tab: insert tab back
-                if let Some(dragged) = drag::get_dragged_tab() {
-                    state.insert_tab(dragged.tab, dragged.source_index);
-                }
-            }
-            // Single-tab: tab already there, close_preview_window restored window state
+            handle_drop_during_creating(&mut state, is_single_tab);
         }
-
         DetachState::Detached { .. } => {
-            // Commit preview window as new main window
-            if let Some(preview_window_id) = crate::window::commit_preview_window() {
-                crate::window::main::focus_window(preview_window_id);
-            }
+            handle_drop_when_detached();
         }
     }
 
@@ -687,6 +633,97 @@ fn handle_drag_mouse_release(mut state: AppState) {
     // Clean up global drag state
     drag::end_active_drag();
     drag::end_drag();
+}
+
+/// Handle drop when cursor is in a window's tab bar (DetachState::None)
+fn handle_drop_in_tab_bar(
+    state: &mut AppState,
+    active: &drag::GlobalActiveDrag,
+    is_single_tab: bool,
+) {
+    use crate::events::{TabTransferRequest, TAB_TRANSFER_REQUEST};
+
+    let (Some(target_wid), Some(dragged)) = (active.target_window_id, drag::get_dragged_tab())
+    else {
+        return;
+    };
+
+    let source_wid = dragged.source_window_id;
+    let current_wid = window().id();
+
+    if target_wid == current_wid {
+        // Drop in current window (source)
+        if is_single_tab {
+            // Single-tab: tab already there, just restore window state
+            crate::window::close_preview_window();
+        } else {
+            // Multi-tab: insert and switch to the tab
+            let insert_index = state.insert_tab(dragged.tab, active.target_index);
+            state.switch_to_tab(insert_index);
+            crate::window::close_preview_window();
+        }
+    } else {
+        // Drop in another window - send transfer request
+        let request = TabTransferRequest {
+            source_window_id: source_wid,
+            target_window_id: target_wid,
+            tab: dragged.tab,
+            target_index: Some(active.target_index),
+            source_directory: state.directory.read().clone(),
+            request_id: uuid::Uuid::new_v4(),
+        };
+        TAB_TRANSFER_REQUEST.send(request).ok();
+        crate::window::main::focus_window(target_wid);
+
+        if is_single_tab {
+            // Single-tab: discard preview and close source window
+            // (tab was never removed, so closing window cleans up)
+            crate::window::discard_preview_window();
+            window().close();
+        } else {
+            // Multi-tab: just close preview window
+            crate::window::close_preview_window();
+        }
+    }
+}
+
+/// Handle drop during debounce period (DetachState::Pending)
+///
+/// Restore tab to source window since no preview was created.
+fn handle_drop_during_pending(state: &mut AppState, is_single_tab: bool) {
+    if is_single_tab {
+        // Single-tab: tab was never removed, nothing to restore
+        return;
+    }
+
+    // Multi-tab: insert tab back to source position
+    if let Some(dragged) = drag::get_dragged_tab() {
+        state.insert_tab(dragged.tab, dragged.source_index);
+    }
+}
+
+/// Handle drop during window creation (DetachState::Creating)
+///
+/// Cancel the creation and restore tab to source window.
+fn handle_drop_during_creating(state: &mut AppState, is_single_tab: bool) {
+    crate::window::close_preview_window();
+
+    if !is_single_tab {
+        // Multi-tab: insert tab back to source position
+        if let Some(dragged) = drag::get_dragged_tab() {
+            state.insert_tab(dragged.tab, dragged.source_index);
+        }
+    }
+    // Single-tab: tab already in window, close_preview_window restored window state
+}
+
+/// Handle drop when preview window is visible (DetachState::Detached)
+///
+/// Commit the preview window as a permanent new window.
+fn handle_drop_when_detached() {
+    if let Some(preview_window_id) = crate::window::commit_preview_window() {
+        crate::window::main::focus_window(preview_window_id);
+    }
 }
 
 /// Calculate window position from screen coordinates and offsets

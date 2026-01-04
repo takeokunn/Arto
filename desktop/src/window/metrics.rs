@@ -28,8 +28,9 @@ pub fn capture_window_metrics(window: &Window) -> WindowMetrics {
     let outer_size = window.outer_size().to_logical::<u32>(scale);
 
     // Use cached chrome inset for conversion; fall back to direct inner_size query
-    let chrome = super::get_chrome_inset();
-    let inner_size = if chrome.y > 0.0 {
+    // Check if CHROME_INSET has been initialized rather than checking value > 0
+    // (a chrome inset of 0 is theoretically valid on some platforms)
+    let inner_size = if super::CHROME_INSET.get().is_some() {
         outer_to_inner_size(outer_size)
     } else {
         // Chrome inset not yet initialized; query directly

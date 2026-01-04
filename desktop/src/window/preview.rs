@@ -219,18 +219,3 @@ pub fn get_preview_window_id() -> Option<WindowId> {
             .map(|preview| preview.window_handle.window.id())
     })
 }
-
-/// Check if the preview window was created by promoting the current window
-///
-/// Returns true if the current window was promoted to become the preview,
-/// false if a new window was created or there's no preview.
-#[allow(dead_code)] // Reserved for future drag-drop preview behavior
-pub fn is_preview_promoted() -> bool {
-    PREVIEW_STATE.with(|state| {
-        state
-            .borrow()
-            .as_ref()
-            .map(|preview| preview.is_promoted)
-            .unwrap_or(false)
-    })
-}

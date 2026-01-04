@@ -81,6 +81,11 @@ fn unregister_tab_count(window_id: WindowId) {
 }
 
 /// Cancel active drag and restore tab to source window on Escape key
+///
+/// Operation order is important to ensure the tab is never lost:
+/// 1. Restore tab to source window (ensures tab exists before any cleanup)
+/// 2. Close preview window (cleanup visual state)
+/// 3. Clear drag state (cleanup global state)
 fn cancel_active_drag_on_escape(
     state: &mut AppState,
     current_window_id: WindowId,
@@ -88,8 +93,15 @@ fn cancel_active_drag_on_escape(
 ) {
     use crate::drag::DetachState;
 
+    // Step 1: Restore tab to source window first (ensures tab is never lost)
+    if let Some(dragged) = drag::get_dragged_tab() {
+        if dragged.source_window_id == current_window_id {
+            state.insert_tab(dragged.tab, dragged.source_index);
+        }
+    }
+
+    // Step 2: Close preview window if visible
     if let Some(active) = drag::get_active_drag() {
-        // Close preview window if visible
         if matches!(
             active.detach_state,
             DetachState::Creating | DetachState::Detached { .. }
@@ -98,13 +110,7 @@ fn cancel_active_drag_on_escape(
         }
     }
 
-    // Restore tab to source window if this is the source
-    if let Some(dragged) = drag::get_dragged_tab() {
-        if dragged.source_window_id == current_window_id {
-            state.insert_tab(dragged.tab, dragged.source_index);
-        }
-    }
-
+    // Step 3: Clear drag state
     drag::end_active_drag();
     drag::end_drag();
     active_drag_signal.set(None);
@@ -253,16 +259,25 @@ pub fn TabBar() -> Element {
                 // Clone the element reference before await to avoid holding GenerationalRef
                 let element = tab_bar_element.read().clone();
                 if let Some(ref el) = element {
-                    if let Ok(rect) = el.get_client_rect().await {
-                        set_tab_bar_bounds(
-                            current_window_id,
-                            TabBarBounds {
-                                left: rect.origin.x,
-                                right: rect.origin.x + rect.size.width,
-                                top: rect.origin.y,
-                                bottom: rect.origin.y + rect.size.height,
-                            },
-                        );
+                    match el.get_client_rect().await {
+                        Ok(rect) => {
+                            set_tab_bar_bounds(
+                                current_window_id,
+                                TabBarBounds {
+                                    left: rect.origin.x,
+                                    right: rect.origin.x + rect.size.width,
+                                    top: rect.origin.y,
+                                    bottom: rect.origin.y + rect.size.height,
+                                },
+                            );
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                ?current_window_id,
+                                ?e,
+                                "Failed to get tab bar client rect during drag update"
+                            );
+                        }
                     }
                 }
                 // Update signal with current global state to trigger re-render
@@ -272,7 +287,15 @@ pub fn TabBar() -> Element {
     });
 
     // Pointer move handler for Pending → Active transition only
-    // Once active, DeviceEvent handlers take over (including target_index calculation)
+    //
+    // Event handling architecture (DOM events vs DeviceEvents):
+    // - DOM PointerEvents: Used for local Pending→Active transition (threshold detection)
+    //   within a single window. These events are reliable and provide client coordinates.
+    // - DeviceEvents: Used for active drag tracking across windows. These are OS-level
+    //   events that work regardless of window focus, enabling cross-window drag.
+    //
+    // Once the drag becomes active (threshold exceeded), DeviceEvent handlers in App
+    // component take over for all subsequent tracking including target_index calculation.
     let handle_pointermove = move |evt: Event<PointerData>| {
         let pointer = evt.data();
         let x = pointer.client_coordinates().x;

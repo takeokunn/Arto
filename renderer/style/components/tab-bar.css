@@ -43,7 +43,10 @@
   gap: 6px;
   padding: 8px 12px;
   padding-right: 28px;
-  /* Fixed width for consistent sizing and placeholder matching */
+  /* Fixed width for consistent sizing and placeholder matching.
+   * IMPORTANT: This value must stay in sync with TAB_WIDTH constant
+   * in desktop/src/drag.rs. If you change this width, update that
+   * constant to the same value. */
   width: 140px;
   box-sizing: border-box;
   background: transparent;

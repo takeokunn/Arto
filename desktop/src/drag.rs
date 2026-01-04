@@ -96,10 +96,28 @@ pub fn find_window_at_point(
 /// Convert screen coordinates to client coordinates for a specific window
 ///
 /// Returns `None` if the window cannot be found or position cannot be retrieved.
+/// Logs debug information on failure to help diagnose coordinate conversion issues.
 fn screen_to_client(window_id: WindowId, screen_x: f64, screen_y: f64) -> Option<(f64, f64)> {
     let windows = crate::window::main::list_visible_main_windows();
-    let handle = windows.iter().find(|w| w.window.id() == window_id)?;
-    let outer_pos = handle.window.outer_position().ok()?;
+    let handle = windows.iter().find(|w| w.window.id() == window_id);
+
+    let Some(handle) = handle else {
+        tracing::debug!(?window_id, "screen_to_client: window not found");
+        return None;
+    };
+
+    let outer_pos = match handle.window.outer_position() {
+        Ok(pos) => pos,
+        Err(e) => {
+            tracing::debug!(
+                ?window_id,
+                ?e,
+                "screen_to_client: failed to get outer position"
+            );
+            return None;
+        }
+    };
+
     let scale = handle.window.scale_factor();
     let chrome = crate::window::get_chrome_inset();
 

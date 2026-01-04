@@ -114,7 +114,10 @@ pub struct TabTransferRequest {
     pub target_window_id: WindowId,
     /// The tab to transfer (with full history)
     pub tab: Tab,
-    /// Target index in the tab bar (None = append at end)
+    /// Target index in the tab bar.
+    ///
+    /// - `Some(index)`: Insert at specific position (used by drag-and-drop)
+    /// - `None`: Append at end of tab bar (used by context menu "Move to Window")
     pub target_index: Option<usize>,
     /// Preserve source window's current directory for new window
     #[allow(dead_code)]

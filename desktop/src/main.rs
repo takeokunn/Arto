@@ -68,9 +68,11 @@ fn main() {
                 window_id,
                 ..
             } => {
-                // Skip updating LAST_FOCUSED_WINDOW for preview windows
-                // to prevent focus from jumping to wrong window during drag
-                if window::get_preview_window_id() != Some(*window_id) {
+                // Skip updating LAST_FOCUSED_WINDOW while a preview window exists
+                // to prevent focus from jumping to wrong window during drag.
+                // This blocks all focus updates during drag, not just when the
+                // preview window itself gains focus.
+                if !window::has_preview_window() {
                     window::update_last_focused_window(*window_id);
                 }
             }

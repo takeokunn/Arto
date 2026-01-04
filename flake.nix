@@ -211,6 +211,7 @@
 
             # Workaround: Nix sets DEVELOPER_DIR to its apple-sdk, which breaks `just build` dmg creation.
             # https://github.com/NixOS/nixpkgs/issues/355486
+            # RUST_SRC_PATH exposes Rust standard library sources for rust-analyzer and similar tools.
             RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
 
             shellHook = ''
