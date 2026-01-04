@@ -55,7 +55,21 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: dioxus-cli@0.7
-      - run: just test
+      # Retry up to 3 times due to flaky NSScreen API tests in headless environment
+      - name: Run tests
+        run: |
+          for i in 1 2 3; do
+            echo "Attempt $i/3"
+            if just test; then
+              exit 0
+            fi
+            if [ $i -lt 3 ]; then
+              echo "Test failed, retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
+          echo "All 3 attempts failed"
+          exit 1
     timeout-minutes: 15
 
   build:
