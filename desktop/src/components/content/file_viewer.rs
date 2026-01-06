@@ -2,7 +2,8 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use super::context_menu::{ContentContextMenu, ContextMenuData};
+use super::context_menu::ContextMenuData;
+use super::context_menu_state::{open_context_menu, ContentContextMenuState};
 use crate::markdown::render_to_html;
 use crate::state::{AppState, TabContent};
 use crate::utils::file::is_markdown_file;
@@ -24,20 +25,20 @@ pub fn FileViewer(file: PathBuf) -> Element {
     let state = use_context::<AppState>();
     let html = use_signal(String::new);
     let reload_trigger = use_signal(|| 0usize);
-    let mut context_menu = use_signal(|| None::<ContextMenuData>);
-
-    // Setup component hooks
-    use_file_loader(file.clone(), html, reload_trigger, state);
-    use_file_watcher(file.clone(), reload_trigger);
-    use_link_click_handler(file.clone(), state);
-    use_mermaid_window_handler();
-    use_context_menu_handler(context_menu);
 
     // Get base directory for link resolution
     let base_dir = file
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| PathBuf::from("."));
+
+    // Setup component hooks
+    use_file_loader(file.clone(), html, reload_trigger, state);
+    use_file_watcher(file.clone(), reload_trigger);
+    use_link_click_handler(file.clone(), state);
+    use_mermaid_window_handler();
+    use_context_menu_handler(file.clone(), base_dir);
+    // TODO: use_search_handler(state); を後で追加
 
     rsx! {
         div {
@@ -46,19 +47,7 @@ pub fn FileViewer(file: PathBuf) -> Element {
                 class: "markdown-body",
                 dangerous_inner_html: "{html}"
             }
-
-            // Render context menu when active
-            if let Some(menu_data) = context_menu() {
-                ContentContextMenu {
-                    position: (menu_data.x, menu_data.y),
-                    context: menu_data.context,
-                    has_selection: menu_data.has_selection,
-                    selected_text: menu_data.selected_text,
-                    current_file: Some(file.clone()),
-                    base_dir: base_dir.clone(),
-                    on_close: move |_| context_menu.set(None),
-                }
-            }
+            // Context menu is rendered at App level to avoid re-rendering content
         }
     }
 }
@@ -250,8 +239,14 @@ fn use_mermaid_window_handler() {
 }
 
 /// Hook to setup context menu handler for right-clicks on content
-fn use_context_menu_handler(mut context_menu: Signal<Option<ContextMenuData>>) {
-    use_effect(move || {
+///
+/// Uses global state to avoid re-rendering FileViewer when menu state changes.
+/// This preserves text selection in the content.
+fn use_context_menu_handler(file: PathBuf, base_dir: PathBuf) {
+    use_effect(use_reactive!(|file, base_dir| {
+        let file = file.clone();
+        let base_dir = base_dir.clone();
+
         // Setup JS context menu handler using the exported function
         let mut eval_provider = document::eval(indoc::indoc! {r#"
             // Setup context menu handler
@@ -263,8 +258,13 @@ fn use_context_menu_handler(mut context_menu: Signal<Option<ContextMenuData>>) {
         spawn(async move {
             while let Ok(data) = eval_provider.recv::<ContextMenuData>().await {
                 tracing::debug!(?data, "Context menu triggered");
-                context_menu.set(Some(data));
+                // Write to global state (doesn't subscribe FileViewer)
+                open_context_menu(ContentContextMenuState {
+                    data,
+                    current_file: Some(file.clone()),
+                    base_dir: base_dir.clone(),
+                });
             }
         });
-    });
+    }));
 }

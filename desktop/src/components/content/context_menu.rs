@@ -54,6 +54,8 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
         // Backdrop to close menu on outside click
         div {
             class: "context-menu-backdrop",
+            // Prevent mousedown from clearing text selection
+            onmousedown: move |evt| evt.prevent_default(),
             onclick: move |_| props.on_close.call(()),
         }
 
@@ -61,6 +63,8 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
         div {
             class: "context-menu content-context-menu",
             style: "left: {props.position.0}px; top: {props.position.1}px;",
+            // Prevent mousedown from clearing text selection
+            onmousedown: move |evt| evt.prevent_default(),
             onclick: move |evt| evt.stop_propagation(),
 
             // Basic operations
@@ -74,10 +78,6 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                         let on_close = props.on_close;
                         move |_| {
                             crate::utils::file_operations::copy_to_clipboard(&selected_text);
-                            // Restore selection after menu closes
-                            let _ = document::eval(r#"
-                                setTimeout(() => window.Arto.restoreSelection(), 50);
-                            "#);
                             on_close.call(());
                         }
                     },

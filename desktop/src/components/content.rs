@@ -1,4 +1,5 @@
 mod context_menu;
+mod context_menu_state;
 mod file_error_view;
 mod file_viewer;
 mod inline_viewer;
@@ -16,6 +17,10 @@ use preferences_view::PreferencesView;
 
 // Re-export for menu system
 pub use preferences_view::set_preferences_tab_to_about;
+
+// Re-export context menu types for App-level rendering
+pub use context_menu::ContentContextMenu;
+pub use context_menu_state::{close_context_menu, CONTENT_CONTEXT_MENU};
 
 #[component]
 pub fn Content() -> Element {

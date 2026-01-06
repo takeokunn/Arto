@@ -9,7 +9,7 @@ use mouse_position::mouse_position::Mouse;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use super::content::Content;
+use super::content::{close_context_menu, Content, ContentContextMenu, CONTENT_CONTEXT_MENU};
 use super::header::Header;
 use super::icon::{Icon, IconName};
 use super::sidebar::Sidebar;
@@ -364,6 +364,19 @@ pub fn App(
             // Drag and drop overlay
             if is_dragging() {
                 DragDropOverlay {}
+            }
+
+            // Content context menu (rendered at App level to prevent FileViewer re-renders)
+            if let Some(menu_state) = CONTENT_CONTEXT_MENU.read().as_ref() {
+                ContentContextMenu {
+                    position: (menu_state.data.x, menu_state.data.y),
+                    context: menu_state.data.context.clone(),
+                    has_selection: menu_state.data.has_selection,
+                    selected_text: menu_state.data.selected_text.clone(),
+                    current_file: menu_state.current_file.clone(),
+                    base_dir: menu_state.base_dir.clone(),
+                    on_close: move |_| close_context_menu(),
+                }
             }
         }
     }
