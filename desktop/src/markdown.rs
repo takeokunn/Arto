@@ -2,6 +2,7 @@ use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
 use lol_html::{element, HtmlRewriter, Settings};
 use pulldown_cmark::{html, CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
+use serde_yaml::Value as YamlValue;
 use std::path::{Path, PathBuf};
 
 /// Render Markdown to HTML
@@ -18,8 +19,11 @@ pub fn render_to_html(markdown: impl AsRef<str>, base_path: impl AsRef<Path>) ->
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| PathBuf::from("."));
 
+    // Extract frontmatter if present
+    let (frontmatter_html, content) = extract_and_render_frontmatter(markdown);
+
     // Process GitHub alerts
-    let processed_markdown = process_github_alerts(markdown);
+    let processed_markdown = process_github_alerts(&content);
 
     // Parse Markdown and process blocks
     let parser = Parser::new_ext(&processed_markdown, options);
@@ -34,7 +38,132 @@ pub fn render_to_html(markdown: impl AsRef<str>, base_path: impl AsRef<Path>) ->
     // Post-process HTML to handle all img and anchor tags (both from Markdown syntax and HTML tags)
     let html_output = post_process_html_tags(&html_output, base_dir.as_path());
 
-    Ok(html_output)
+    // Prepend frontmatter table if present
+    let final_output = if frontmatter_html.is_empty() {
+        html_output
+    } else {
+        format!("{}\n{}", frontmatter_html, html_output)
+    };
+
+    Ok(final_output)
+}
+
+/// Extract frontmatter from markdown and render it as an HTML table
+fn extract_and_render_frontmatter(markdown: &str) -> (String, String) {
+    // Check if markdown starts with frontmatter delimiter
+    if !markdown.starts_with("---") {
+        return (String::new(), markdown.to_string());
+    }
+
+    // Find the closing delimiter
+    let rest = &markdown[3..];
+    let Some(end_pos) = rest.find("\n---") else {
+        return (String::new(), markdown.to_string());
+    };
+
+    let frontmatter_str = rest[..end_pos].trim();
+    let content = rest[end_pos + 4..].trim_start();
+
+    // Parse YAML
+    let Ok(yaml) = serde_yaml::from_str::<YamlValue>(frontmatter_str) else {
+        return (String::new(), markdown.to_string());
+    };
+
+    // Render frontmatter as table
+    let html = render_frontmatter_table(&yaml);
+
+    (html, content.to_string())
+}
+
+/// Render YAML frontmatter as an HTML table
+fn render_frontmatter_table(yaml: &YamlValue) -> String {
+    let YamlValue::Mapping(mapping) = yaml else {
+        return String::new();
+    };
+
+    if mapping.is_empty() {
+        return String::new();
+    }
+
+    let mut rows = String::new();
+    for (key, value) in mapping {
+        let key_str = yaml_to_string(key);
+        let value_str = render_yaml_value(value);
+        rows.push_str(&format!(
+            "<tr><th>{}</th><td>{}</td></tr>\n",
+            html_escape::encode_text(&key_str),
+            value_str
+        ));
+    }
+
+    format!(
+        r#"<details class="frontmatter" open>
+<summary class="frontmatter-summary">Frontmatter</summary>
+<table class="frontmatter-table">
+<tbody>
+{}
+</tbody>
+</table>
+</details>"#,
+        rows
+    )
+}
+
+/// Convert a YAML value to a string representation
+fn yaml_to_string(value: &YamlValue) -> String {
+    match value {
+        YamlValue::Null => "null".to_string(),
+        YamlValue::Bool(b) => b.to_string(),
+        YamlValue::Number(n) => n.to_string(),
+        YamlValue::String(s) => s.clone(),
+        YamlValue::Sequence(seq) => seq
+            .iter()
+            .map(yaml_to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        YamlValue::Mapping(_) => "[object]".to_string(),
+        YamlValue::Tagged(tagged) => yaml_to_string(&tagged.value),
+    }
+}
+
+/// Render a YAML value as HTML (with special handling for arrays and objects)
+fn render_yaml_value(value: &YamlValue) -> String {
+    match value {
+        YamlValue::Null => "<span class=\"yaml-null\">null</span>".to_string(),
+        YamlValue::Bool(b) => format!("<span class=\"yaml-bool\">{}</span>", b),
+        YamlValue::Number(n) => format!("<span class=\"yaml-number\">{}</span>", n),
+        YamlValue::String(s) => html_escape::encode_text(s).to_string(),
+        YamlValue::Sequence(seq) => {
+            if seq.is_empty() {
+                return "<span class=\"yaml-empty\">[]</span>".to_string();
+            }
+            let items: Vec<String> = seq
+                .iter()
+                .map(|v| format!("<li>{}</li>", render_yaml_value(v)))
+                .collect();
+            format!("<ul class=\"yaml-list\">{}</ul>", items.join(""))
+        }
+        YamlValue::Mapping(mapping) => {
+            if mapping.is_empty() {
+                return "<span class=\"yaml-empty\">{{}}</span>".to_string();
+            }
+            let rows: Vec<String> = mapping
+                .iter()
+                .map(|(k, v)| {
+                    format!(
+                        "<tr><th>{}</th><td>{}</td></tr>",
+                        html_escape::encode_text(&yaml_to_string(k)),
+                        render_yaml_value(v)
+                    )
+                })
+                .collect();
+            format!(
+                "<table class=\"yaml-nested-table\"><tbody>{}</tbody></table>",
+                rows.join("")
+            )
+        }
+        YamlValue::Tagged(tagged) => render_yaml_value(&tagged.value),
+    }
 }
 
 /// Get SVG icon placeholder for alert type (actual SVG injected by JavaScript)
@@ -811,5 +940,104 @@ mod tests {
             result.contains(r#"<pre class="preprocessed-mermaid""#),
             "Should render mermaid"
         );
+    }
+
+    #[test]
+    fn test_extract_and_render_frontmatter_basic() {
+        let markdown = indoc! {"
+            ---
+            title: Test Document
+            author: John Doe
+            ---
+
+            # Hello World
+        "};
+
+        let (html, content) = extract_and_render_frontmatter(markdown);
+
+        assert!(html.contains(r#"<details class="frontmatter""#));
+        assert!(html.contains(r#"<table class="frontmatter-table""#));
+        assert!(html.contains("<th>title</th>"));
+        assert!(html.contains("<td>Test Document</td>"));
+        assert!(html.contains("<th>author</th>"));
+        assert!(html.contains("<td>John Doe</td>"));
+        assert!(content.starts_with("# Hello World"));
+    }
+
+    #[test]
+    fn test_extract_and_render_frontmatter_with_types() {
+        let markdown = indoc! {r#"
+            ---
+            enabled: true
+            count: 42
+            empty:
+            ---
+
+            Content
+        "#};
+
+        let (html, _content) = extract_and_render_frontmatter(markdown);
+
+        assert!(html.contains(r#"<span class="yaml-bool">true</span>"#));
+        assert!(html.contains(r#"<span class="yaml-number">42</span>"#));
+        assert!(html.contains(r#"<span class="yaml-null">null</span>"#));
+    }
+
+    #[test]
+    fn test_extract_and_render_frontmatter_with_list() {
+        let markdown = indoc! {"
+            ---
+            tags:
+              - rust
+              - markdown
+            ---
+
+            Content
+        "};
+
+        let (html, _content) = extract_and_render_frontmatter(markdown);
+
+        assert!(html.contains(r#"<ul class="yaml-list">"#));
+        assert!(html.contains("<li>rust</li>"));
+        assert!(html.contains("<li>markdown</li>"));
+    }
+
+    #[test]
+    fn test_extract_and_render_frontmatter_no_frontmatter() {
+        let markdown = "# Just a heading\n\nSome content";
+
+        let (html, content) = extract_and_render_frontmatter(markdown);
+
+        assert!(html.is_empty());
+        assert_eq!(content, markdown);
+    }
+
+    #[test]
+    fn test_render_to_html_with_frontmatter() {
+        let markdown = indoc! {"
+            ---
+            title: My Document
+            draft: false
+            ---
+
+            # Content Here
+        "};
+
+        let temp_dir = TempDir::new().unwrap();
+        let md_path = temp_dir.path().join("test.md");
+
+        let result = render_to_html(markdown, &md_path).unwrap();
+
+        // Frontmatter should appear before the main content
+        assert!(result.contains(r#"<details class="frontmatter""#));
+        assert!(result.contains("<th>title</th>"));
+        assert!(result.contains("<td>My Document</td>"));
+        assert!(result.contains(r#"<span class="yaml-bool">false</span>"#));
+        assert!(result.contains("<h1>Content Here</h1>"));
+
+        // Frontmatter table should come before the heading
+        let frontmatter_pos = result.find("frontmatter-table").unwrap();
+        let heading_pos = result.find("<h1>").unwrap();
+        assert!(frontmatter_pos < heading_pos, "Frontmatter should appear before content");
     }
 }
