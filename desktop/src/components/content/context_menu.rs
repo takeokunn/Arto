@@ -110,6 +110,29 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                 },
             }
 
+            ContextMenuSeparator {}
+
+            ContextMenuItem {
+                label: "Find in Page",
+                shortcut: Some("⌘F"),
+                icon: Some(IconName::Search),
+                on_click: {
+                    let on_close = props.on_close;
+                    let selected_text = props.selected_text.clone();
+                    let has_selection = props.has_selection;
+                    move |_| {
+                        let mut state = use_context::<AppState>();
+                        let text = if has_selection && !selected_text.is_empty() {
+                            Some(selected_text.clone())
+                        } else {
+                            None
+                        };
+                        state.open_search_with_text(text);
+                        on_close.call(());
+                    }
+                },
+            }
+
             // File operations (when viewing a file)
             if let Some(ref file) = props.current_file {
                 ContextMenuSeparator {}

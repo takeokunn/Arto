@@ -12,6 +12,7 @@ use std::time::Duration;
 use super::content::{close_context_menu, Content, ContentContextMenu, CONTENT_CONTEXT_MENU};
 use super::header::Header;
 use super::icon::{Icon, IconName};
+use super::search_bar::SearchBar;
 use super::sidebar::Sidebar;
 use super::tab::TabBar;
 use super::toc_panel::TocPanel;
@@ -371,6 +372,7 @@ pub fn App(
             div {
                 class: "main-area",
                 Header {},
+                SearchBar {},
                 TabBar {},
                 Content {},
             }

@@ -46,6 +46,12 @@ pub struct AppState {
     pub toc_headings: Signal<Vec<HeadingInfo>>,
     pub position: Signal<LogicalPosition<i32>>,
     pub size: Signal<LogicalSize<u32>>,
+    // Search state (not persisted, managed via JavaScript for IME compatibility)
+    pub search_open: Signal<bool>,
+    pub search_match_count: Signal<usize>,
+    pub search_current_index: Signal<usize>,
+    /// Initial search text to populate when opening search bar
+    pub search_initial_text: Signal<Option<String>>,
 }
 
 impl Default for AppState {
@@ -63,6 +69,11 @@ impl Default for AppState {
             toc_headings: Signal::new(Vec::new()),
             position: Signal::new(Default::default()),
             size: Signal::new(Default::default()),
+            // Search state
+            search_open: Signal::new(false),
+            search_match_count: Signal::new(0),
+            search_current_index: Signal::new(0),
+            search_initial_text: Signal::new(None),
         }
     }
 }
@@ -82,5 +93,30 @@ impl AppState {
         let new_state = !*self.toc_open.read();
         self.toc_open.set(new_state);
         LAST_FOCUSED_STATE.write().toc_open = new_state;
+    }
+
+    /// Toggle search bar visibility
+    pub fn toggle_search(&mut self) {
+        let new_state = !*self.search_open.read();
+        self.search_open.set(new_state);
+        if !new_state {
+            // Clear match count when closing
+            self.search_match_count.set(0);
+            self.search_current_index.set(0);
+        }
+    }
+
+    /// Update search results from JavaScript callback
+    pub fn update_search_results(&mut self, count: usize, current: usize) {
+        self.search_match_count.set(count);
+        self.search_current_index.set(current);
+    }
+
+    /// Open search bar and populate with given text
+    pub fn open_search_with_text(&mut self, text: Option<String>) {
+        // Set initial text for SearchBar to pick up
+        self.search_initial_text.set(text);
+        // Open search bar
+        self.search_open.set(true);
     }
 }

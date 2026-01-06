@@ -38,7 +38,7 @@ pub fn FileViewer(file: PathBuf) -> Element {
     use_link_click_handler(file.clone(), state);
     use_mermaid_window_handler();
     use_context_menu_handler(file.clone(), base_dir);
-    // TODO: use_search_handler(state); を後で追加
+    use_search_handler(state);
 
     rsx! {
         div {
@@ -270,4 +270,29 @@ fn use_context_menu_handler(file: PathBuf, base_dir: PathBuf) {
             }
         });
     }));
+}
+
+/// Data structure for search results from JavaScript
+#[derive(Serialize, Deserialize)]
+struct SearchResultData {
+    count: usize,
+    current: usize,
+}
+
+/// Hook to setup search result handler
+fn use_search_handler(mut state: AppState) {
+    use_effect(move || {
+        // Setup JS search handler to receive match counts
+        let mut eval_provider = document::eval(indoc::indoc! {r#"
+            window.Arto.search.setup((data) => {
+                dioxus.send(data);
+            });
+        "#});
+
+        spawn(async move {
+            while let Ok(data) = eval_provider.recv::<SearchResultData>().await {
+                state.update_search_results(data.count, data.current);
+            }
+        });
+    });
 }

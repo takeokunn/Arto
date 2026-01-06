@@ -4,6 +4,7 @@ pub mod header;
 pub mod icon;
 pub mod main_app;
 pub mod mermaid_window;
+pub mod search_bar;
 pub mod sidebar;
 pub mod tab;
 pub mod theme_selector;

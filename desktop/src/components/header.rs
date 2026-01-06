@@ -148,6 +148,27 @@ pub fn Header() -> Element {
             div {
                 class: "header-right",
 
+                // Search button
+                button {
+                    class: "nav-button search-button",
+                    class: if *state.search_open.read() { "active" },
+                    title: "Search in page",
+                    onclick: move |_| {
+                        let was_closed = !*state.search_open.read();
+                        state.toggle_search();
+                        if was_closed {
+                            // Focus the search input after opening
+                            spawn(async {
+                                let _ = document::eval(
+                                    "document.querySelector('.search-input')?.focus()",
+                                )
+                                .await;
+                            });
+                        }
+                    },
+                    Icon { name: IconName::Search, size: 20 }
+                }
+
                 // Reload button
                 button {
                     class: "nav-button reload-button",

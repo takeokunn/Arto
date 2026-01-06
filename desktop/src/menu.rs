@@ -25,6 +25,7 @@ enum MenuId {
     CloseAllChildWindows,
     CloseAllWindows,
     Preferences,
+    Find,
     ToggleSidebar,
     ActualSize,
     ZoomIn,
@@ -52,6 +53,7 @@ impl MenuId {
             "window.close_all_child_windows" => Some(Self::CloseAllChildWindows),
             "window.close_all_windows" => Some(Self::CloseAllWindows),
             "app.preferences" => Some(Self::Preferences),
+            "edit.find" => Some(Self::Find),
             "view.toggle_sidebar" => Some(Self::ToggleSidebar),
             "view.actual_size" => Some(Self::ActualSize),
             "view.zoom_in" => Some(Self::ZoomIn),
@@ -80,6 +82,7 @@ impl MenuId {
             Self::CloseAllChildWindows => "window.close_all_child_windows",
             Self::CloseAllWindows => "window.close_all_windows",
             Self::Preferences => "app.preferences",
+            Self::Find => "edit.find",
             Self::ToggleSidebar => "view.toggle_sidebar",
             Self::ActualSize => "view.actual_size",
             Self::ZoomIn => "view.zoom_in",
@@ -194,6 +197,8 @@ fn add_edit_menu(menu: &Menu) {
             &PredefinedMenuItem::paste(Some("Paste")),
             &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::select_all(Some("Select All")),
+            &PredefinedMenuItem::separator(),
+            &create_menu_item(MenuId::Find, "Find...", Some(Code::KeyF), None),
         ])
         .unwrap();
 
@@ -429,6 +434,10 @@ pub fn handle_menu_event_with_state(event: &MenuEvent, state: &mut AppState) -> 
             if let Some(file) = get_current_file(state) {
                 crate::utils::file_operations::copy_to_clipboard(&file.to_string_lossy());
             }
+        }
+        MenuId::Find => {
+            // None = get selected text from JavaScript
+            state.open_search_with_text(None);
         }
         _ => return false,
     }
