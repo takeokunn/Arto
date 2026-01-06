@@ -1,0 +1,154 @@
+/* TOC Panel container */
+.toc-panel {
+  display: flex;
+  flex-direction: row;
+  width: 0;
+  min-width: 0;
+  max-width: 50vw;
+  background-color: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.toc-panel.visible {
+  /* Width is set via inline style */
+}
+
+.toc-panel.resizing {
+  transition: none; /* Disable transition during resize */
+}
+
+/* Resize handle (left side) */
+.toc-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  cursor: ew-resize;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+  z-index: 10;
+}
+
+.toc-resize-handle:hover,
+.toc-resize-handle.resizing {
+  background-color: var(--primary-color);
+  opacity: 0.3;
+}
+
+.toc-resize-handle::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 60px;
+  background-color: var(--text-secondary);
+  opacity: 0.4;
+  border-radius: 1px;
+}
+
+/* TOC content */
+.toc-content {
+  flex: 1;
+  padding: 16px;
+  padding-left: 20px; /* Account for resize handle */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.toc-panel:not(.visible) .toc-content {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* TOC title */
+.toc-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
+  letter-spacing: 0.05em;
+}
+
+/* TOC empty message */
+.toc-empty {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* TOC list */
+.toc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* TOC item */
+.toc-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--text-color);
+  opacity: 0.7;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toc-item:hover {
+  background-color: var(--hover-bg);
+  opacity: 1;
+}
+
+/* Indentation based on heading level */
+.toc-item[data-level="1"] {
+  padding-left: 8px;
+  font-weight: 600;
+}
+
+.toc-item[data-level="2"] {
+  padding-left: 16px;
+  font-weight: 500;
+}
+
+.toc-item[data-level="3"] {
+  padding-left: 24px;
+}
+
+.toc-item[data-level="4"] {
+  padding-left: 32px;
+  font-size: 0.8rem;
+}
+
+.toc-item[data-level="5"] {
+  padding-left: 40px;
+  font-size: 0.8rem;
+}
+
+.toc-item[data-level="6"] {
+  padding-left: 48px;
+  font-size: 0.8rem;
+}
+
+/* Scrollbar styling */
+.toc-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.toc-content::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 2px;
+}
+
+.toc-content::-webkit-scrollbar-track {
+  background: transparent;
+}

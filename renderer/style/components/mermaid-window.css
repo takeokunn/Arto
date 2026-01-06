@@ -67,6 +67,16 @@
   opacity: 1;
 }
 
+.viewer-control-btn.copied .icon {
+  color: var(--success-color, #22c55e);
+  opacity: 1;
+}
+
+.viewer-control-btn.error .icon {
+  color: var(--error-color, #ef4444);
+  opacity: 1;
+}
+
 .mermaid-window-canvas {
   flex: 1;
   position: relative;

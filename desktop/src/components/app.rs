@@ -9,11 +9,13 @@ use mouse_position::mouse_position::Mouse;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use super::content::Content;
+use super::content::{close_context_menu, Content, ContentContextMenu, CONTENT_CONTEXT_MENU};
 use super::header::Header;
 use super::icon::{Icon, IconName};
+use super::search_bar::SearchBar;
 use super::sidebar::Sidebar;
 use super::tab::TabBar;
+use super::toc_panel::TocPanel;
 use crate::assets::MAIN_SCRIPT;
 use crate::drag;
 use crate::events::{
@@ -61,6 +63,8 @@ pub fn App(
     sidebar_open: bool,
     sidebar_width: f64,
     sidebar_show_all_files: bool,
+    toc_open: bool,
+    toc_width: f64,
 ) -> Element {
     // Initialize application state with the provided tab
     let mut state = use_context_provider(|| {
@@ -89,6 +93,17 @@ pub fn App(
             state.sidebar_width = sidebar_width;
             state.sidebar_show_all_files = sidebar_show_all_files;
         }
+
+        // Apply initial TOC settings from params
+        {
+            app_state.toc_open.set(toc_open);
+            app_state.toc_width.set(toc_width);
+            // Update last focused state for "Last Focused" behavior
+            let mut state = LAST_FOCUSED_STATE.write();
+            state.toc_open = toc_open;
+            state.toc_width = toc_width;
+        }
+
         let metrics = crate::window::metrics::capture_window_metrics(&window().window);
         *app_state.position.write() = LogicalPosition::new(metrics.position.x, metrics.position.y);
         *app_state.size.write() = LogicalSize::new(metrics.size.width, metrics.size.height);
@@ -357,13 +372,29 @@ pub fn App(
             div {
                 class: "main-area",
                 Header {},
+                SearchBar {},
                 TabBar {},
                 Content {},
             }
 
+            TocPanel { headings: state.toc_headings.read().clone() }
+
             // Drag and drop overlay
             if is_dragging() {
                 DragDropOverlay {}
+            }
+
+            // Content context menu (rendered at App level to prevent FileViewer re-renders)
+            if let Some(menu_state) = CONTENT_CONTEXT_MENU.read().as_ref() {
+                ContentContextMenu {
+                    position: (menu_state.data.x, menu_state.data.y),
+                    context: menu_state.data.context.clone(),
+                    has_selection: menu_state.data.has_selection,
+                    selected_text: menu_state.data.selected_text.clone(),
+                    current_file: menu_state.current_file.clone(),
+                    base_dir: menu_state.base_dir.clone(),
+                    on_close: move |_| close_context_menu(),
+                }
             }
         }
     }

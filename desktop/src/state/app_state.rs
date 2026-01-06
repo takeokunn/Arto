@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use std::path::PathBuf;
 
 use super::persistence::LAST_FOCUSED_STATE;
+use crate::markdown::HeadingInfo;
 use crate::theme::Theme;
 
 mod sidebar;
@@ -40,21 +41,39 @@ pub struct AppState {
     pub zoom_level: Signal<f64>,
     pub directory: Signal<Option<PathBuf>>,
     pub sidebar: Signal<Sidebar>,
+    pub toc_open: Signal<bool>,
+    pub toc_width: Signal<f64>,
+    pub toc_headings: Signal<Vec<HeadingInfo>>,
     pub position: Signal<LogicalPosition<i32>>,
     pub size: Signal<LogicalSize<u32>>,
+    // Search state (not persisted, managed via JavaScript for IME compatibility)
+    pub search_open: Signal<bool>,
+    pub search_match_count: Signal<usize>,
+    pub search_current_index: Signal<usize>,
+    /// Initial search text to populate when opening search bar
+    pub search_initial_text: Signal<Option<String>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
+        let persisted = LAST_FOCUSED_STATE.read();
         Self {
             tabs: Signal::new(vec![Tab::default()]),
             active_tab: Signal::new(0),
-            current_theme: Signal::new(LAST_FOCUSED_STATE.read().theme),
+            current_theme: Signal::new(persisted.theme),
             zoom_level: Signal::new(1.0),
             directory: Signal::new(None),
             sidebar: Signal::new(Sidebar::default()),
+            toc_open: Signal::new(persisted.toc_open),
+            toc_width: Signal::new(persisted.toc_width),
+            toc_headings: Signal::new(Vec::new()),
             position: Signal::new(Default::default()),
             size: Signal::new(Default::default()),
+            // Search state
+            search_open: Signal::new(false),
+            search_match_count: Signal::new(0),
+            search_current_index: Signal::new(0),
+            search_initial_text: Signal::new(None),
         }
     }
 }
@@ -67,5 +86,37 @@ impl AppState {
         *self.directory.write() = Some(path.clone());
         self.sidebar.write().expanded_dirs.clear();
         LAST_FOCUSED_STATE.write().directory = Some(path);
+    }
+
+    /// Toggle TOC panel visibility
+    pub fn toggle_toc(&mut self) {
+        let new_state = !*self.toc_open.read();
+        self.toc_open.set(new_state);
+        LAST_FOCUSED_STATE.write().toc_open = new_state;
+    }
+
+    /// Toggle search bar visibility
+    pub fn toggle_search(&mut self) {
+        let new_state = !*self.search_open.read();
+        self.search_open.set(new_state);
+        if !new_state {
+            // Clear match count when closing
+            self.search_match_count.set(0);
+            self.search_current_index.set(0);
+        }
+    }
+
+    /// Update search results from JavaScript callback
+    pub fn update_search_results(&mut self, count: usize, current: usize) {
+        self.search_match_count.set(count);
+        self.search_current_index.set(current);
+    }
+
+    /// Open search bar and populate with given text
+    pub fn open_search_with_text(&mut self, text: Option<String>) {
+        // Set initial text for SearchBar to pick up
+        self.search_initial_text.set(text);
+        // Open search bar
+        self.search_open.set(true);
     }
 }

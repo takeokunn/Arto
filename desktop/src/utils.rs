@@ -1,3 +1,4 @@
 pub mod file;
+pub mod file_operations;
 pub mod screen;
 pub mod window_title;

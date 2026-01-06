@@ -156,15 +156,17 @@ async function copyMermaidAsImage(pre: HTMLPreElement, button: HTMLButtonElement
   }
 }
 
-function findSvgElement(pre: HTMLPreElement): SVGElement {
-  const svg = pre.querySelector("svg");
+/** Find SVG element in a container */
+export function findSvgElement(container: Element): SVGElement {
+  const svg = container.querySelector("svg");
   if (!svg) {
     throw new Error("No SVG element found");
   }
   return svg;
 }
 
-function getSvgDimensions(svg: SVGElement): { width: number; height: number } {
+/** Get SVG dimensions from bounding box */
+export function getSvgDimensions(svg: SVGElement): { width: number; height: number } {
   const bbox = svg.getBBox();
   const width = bbox.width;
   const height = bbox.height;
@@ -176,7 +178,8 @@ function getSvgDimensions(svg: SVGElement): { width: number; height: number } {
   return { width, height };
 }
 
-function createCanvasFromSvg(
+/** Create a canvas with the SVG background color applied */
+export function createCanvasFromSvg(
   svg: SVGElement,
   dimensions: { width: number; height: number },
 ): HTMLCanvasElement {
@@ -191,13 +194,17 @@ function createCanvasFromSvg(
   }
 
   ctx.scale(scale, scale);
-  ctx.fillStyle = "#ffffff";
+
+  // Get background color from current theme (use body where data-theme is set)
+  const bgColor = getComputedStyle(document.body).getPropertyValue("--bg-color").trim();
+  ctx.fillStyle = bgColor || "#ffffff";
   ctx.fillRect(0, 0, dimensions.width, dimensions.height);
 
   return canvas;
 }
 
-function convertSvgToDataUrl(
+/** Convert SVG element to data URL */
+export function convertSvgToDataUrl(
   svg: SVGElement,
   dimensions: { width: number; height: number },
 ): string {
@@ -211,7 +218,8 @@ function convertSvgToDataUrl(
   return `data:image/svg+xml;base64,${base64SVG}`;
 }
 
-function createBlobPromise(canvas: HTMLCanvasElement, dataUrl: string): Promise<Blob> {
+/** Create a blob promise from canvas and SVG data URL */
+export function createBlobPromise(canvas: HTMLCanvasElement, dataUrl: string): Promise<Blob> {
   return new Promise<Blob>((resolve, reject) => {
     const img = new Image();
 

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use crate::components::icon::{Icon, IconName};
 use crate::state::AppState;
 use crate::utils::file::is_markdown_file;
+use crate::watcher::FILE_WATCHER;
 
 // Sort entries: directories first, then files, both alphabetically
 fn sort_entries(items: &mut [PathBuf]) {
@@ -44,6 +45,9 @@ pub fn FileExplorer() -> Element {
 
     // Refresh counter to force DirectoryTree re-render
     let refresh_counter = use_signal(|| 0u32);
+
+    // Watch directory for file system changes
+    use_directory_watcher(root_directory.clone(), refresh_counter);
 
     rsx! {
         div {
@@ -333,4 +337,32 @@ fn FileTreeNode(path: PathBuf, depth: usize, refresh_counter: Signal<u32>) -> El
             }
         }
     }
+}
+
+/// Hook to watch a directory for file system changes and trigger refresh
+fn use_directory_watcher(directory: Option<PathBuf>, mut refresh_counter: Signal<u32>) {
+    use_effect(use_reactive!(|directory| {
+        spawn(async move {
+            let Some(dir) = directory else {
+                return;
+            };
+
+            // Start watching the directory
+            let Ok(mut watcher) = FILE_WATCHER.watch_directory(dir.clone()).await else {
+                tracing::error!("Failed to start directory watcher for {:?}", dir);
+                return;
+            };
+
+            tracing::debug!("Directory watcher started for {:?}", dir);
+
+            // Listen for changes and trigger refresh
+            while watcher.recv().await.is_some() {
+                tracing::trace!(?dir, "Directory changed, triggering refresh");
+                refresh_counter.set(refresh_counter() + 1);
+            }
+
+            // Cleanup when effect is re-run or component unmounts
+            let _ = FILE_WATCHER.unwatch_directory(dir).await;
+        });
+    }));
 }

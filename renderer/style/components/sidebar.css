@@ -269,4 +269,5 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative; /* For search bar positioning */
 }

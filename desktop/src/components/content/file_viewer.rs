@@ -2,7 +2,9 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use crate::markdown::render_to_html;
+use super::context_menu::ContextMenuData;
+use super::context_menu_state::{open_context_menu, ContentContextMenuState};
+use crate::markdown::render_to_html_with_toc;
 use crate::state::{AppState, TabContent};
 use crate::utils::file::is_markdown_file;
 use crate::watcher::FILE_WATCHER;
@@ -24,11 +26,19 @@ pub fn FileViewer(file: PathBuf) -> Element {
     let html = use_signal(String::new);
     let reload_trigger = use_signal(|| 0usize);
 
+    // Get base directory for link resolution
+    let base_dir = file
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+
     // Setup component hooks
     use_file_loader(file.clone(), html, reload_trigger, state);
     use_file_watcher(file.clone(), reload_trigger);
-    use_link_click_handler(file, state);
+    use_link_click_handler(file.clone(), state);
     use_mermaid_window_handler();
+    use_context_menu_handler(file.clone(), base_dir);
+    use_search_handler(state);
 
     rsx! {
         div {
@@ -37,6 +47,7 @@ pub fn FileViewer(file: PathBuf) -> Element {
                 class: "markdown-body",
                 dangerous_inner_html: "{html}"
             }
+            // Context menu is rendered at App level to avoid re-rendering content
         }
     }
 }
@@ -61,10 +72,11 @@ fn use_file_loader(
                 Ok(content) => {
                     // Check if file has markdown extension
                     if is_markdown_file(&file) {
-                        // Render as markdown
-                        match render_to_html(&content, &file) {
-                            Ok(rendered) => {
+                        // Render as markdown with TOC heading extraction
+                        match render_to_html_with_toc(&content, &file) {
+                            Ok((rendered, headings)) => {
                                 html.set(rendered);
+                                state.toc_headings.set(headings);
                                 tracing::trace!("Rendered as Markdown: {:?}", &file);
                             }
                             Err(e) => {
@@ -80,6 +92,7 @@ fn use_file_loader(
                                     escaped_content
                                 );
                                 html.set(plain_html);
+                                state.toc_headings.set(Vec::new());
                             }
                         }
                     } else {
@@ -91,6 +104,7 @@ fn use_file_loader(
                             escaped_content
                         );
                         html.set(plain_html);
+                        state.toc_headings.set(Vec::new());
                     }
                 }
                 Err(e) => {
@@ -222,6 +236,62 @@ fn use_mermaid_window_handler() {
                         }
                     }
                 }
+            }
+        });
+    });
+}
+
+/// Hook to setup context menu handler for right-clicks on content
+///
+/// Uses global state to avoid re-rendering FileViewer when menu state changes.
+/// This preserves text selection in the content.
+fn use_context_menu_handler(file: PathBuf, base_dir: PathBuf) {
+    use_effect(use_reactive!(|file, base_dir| {
+        let file = file.clone();
+        let base_dir = base_dir.clone();
+
+        // Setup JS context menu handler using the exported function
+        let mut eval_provider = document::eval(indoc::indoc! {r#"
+            // Setup context menu handler
+            window.Arto.setupContextMenu((data) => {
+                dioxus.send(data);
+            });
+        "#});
+
+        spawn(async move {
+            while let Ok(data) = eval_provider.recv::<ContextMenuData>().await {
+                tracing::debug!(?data, "Context menu triggered");
+                // Write to global state (doesn't subscribe FileViewer)
+                open_context_menu(ContentContextMenuState {
+                    data,
+                    current_file: Some(file.clone()),
+                    base_dir: base_dir.clone(),
+                });
+            }
+        });
+    }));
+}
+
+/// Data structure for search results from JavaScript
+#[derive(Serialize, Deserialize)]
+struct SearchResultData {
+    count: usize,
+    current: usize,
+}
+
+/// Hook to setup search result handler
+fn use_search_handler(mut state: AppState) {
+    use_effect(move || {
+        // Setup JS search handler to receive match counts
+        let mut eval_provider = document::eval(indoc::indoc! {r#"
+            window.Arto.search.setup((data) => {
+                dioxus.send(data);
+            });
+        "#});
+
+        spawn(async move {
+            while let Ok(data) = eval_provider.recv::<SearchResultData>().await {
+                state.update_search_results(data.count, data.current);
             }
         });
     });

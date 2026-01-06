@@ -148,6 +148,27 @@ pub fn Header() -> Element {
             div {
                 class: "header-right",
 
+                // Search button
+                button {
+                    class: "nav-button search-button",
+                    class: if *state.search_open.read() { "active" },
+                    title: "Search in page",
+                    onclick: move |_| {
+                        let was_closed = !*state.search_open.read();
+                        state.toggle_search();
+                        if was_closed {
+                            // Focus the search input after opening
+                            spawn(async {
+                                let _ = document::eval(
+                                    "document.querySelector('.search-input')?.focus()",
+                                )
+                                .await;
+                            });
+                        }
+                    },
+                    Icon { name: IconName::Search, size: 20 }
+                }
+
                 // Reload button
                 button {
                     class: "nav-button reload-button",
@@ -160,6 +181,20 @@ pub fn Header() -> Element {
 
                 // Theme selector
                 ThemeSelector { current_theme: state.current_theme }
+
+                // TOC toggle button
+                button {
+                    class: "toc-toggle-button",
+                    class: if *state.toc_open.read() { "active" },
+                    title: "Toggle Table of Contents",
+                    onclick: move |_| {
+                        state.toggle_toc();
+                    },
+                    Icon {
+                        name: IconName::List,
+                        size: 18,
+                    }
+                }
             }
         }
     }

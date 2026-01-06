@@ -4,6 +4,7 @@ mod behavior;
 mod directory_config;
 mod sidebar_config;
 mod theme_config;
+mod toc_config;
 mod window_dimension;
 mod window_position_config;
 mod window_size_config;
@@ -12,6 +13,7 @@ pub use behavior::{NewWindowBehavior, StartupBehavior};
 pub use directory_config::DirectoryConfig;
 pub use sidebar_config::SidebarConfig;
 pub use theme_config::ThemeConfig;
+pub use toc_config::{TocConfig, DEFAULT_TOC_WIDTH};
 pub use window_dimension::{WindowDimension, WindowDimensionUnit};
 pub use window_position_config::{
     WindowPosition, WindowPositionConfig, WindowPositionMode, WindowPositionOffset,
@@ -25,6 +27,7 @@ pub struct Config {
     pub directory: DirectoryConfig,
     pub theme: ThemeConfig,
     pub sidebar: SidebarConfig,
+    pub toc: TocConfig,
     pub window_position: WindowPositionConfig,
     pub window_size: WindowSizeConfig,
 }
@@ -56,6 +59,12 @@ mod tests {
         assert!(!config.sidebar.default_show_all_files);
         assert_eq!(config.sidebar.on_startup, StartupBehavior::Default);
         assert_eq!(config.sidebar.on_new_window, NewWindowBehavior::Default);
+
+        // TOC defaults
+        assert!(!config.toc.default_open);
+        assert_eq!(config.toc.default_width, 220.0);
+        assert_eq!(config.toc.on_startup, StartupBehavior::Default);
+        assert_eq!(config.toc.on_new_window, NewWindowBehavior::Default);
 
         // Window size defaults
         assert_eq!(config.window_size.default_size.width.value, 1000.0);
@@ -115,6 +124,12 @@ mod tests {
                 on_startup: StartupBehavior::LastClosed,
                 on_new_window: NewWindowBehavior::LastFocused,
             },
+            toc: TocConfig {
+                default_open: true,
+                default_width: 250.0,
+                on_startup: StartupBehavior::LastClosed,
+                on_new_window: NewWindowBehavior::LastFocused,
+            },
             window_position: WindowPositionConfig {
                 default_position: WindowPosition {
                     x: WindowDimension {
@@ -158,6 +173,8 @@ mod tests {
         );
         assert!(!parsed.sidebar.default_open);
         assert_eq!(parsed.sidebar.default_width, 320.0);
+        assert!(parsed.toc.default_open);
+        assert_eq!(parsed.toc.default_width, 250.0);
         assert_eq!(parsed.window_position.default_position.x.value, 10.0);
         assert_eq!(
             parsed.window_position.default_position.x.unit,

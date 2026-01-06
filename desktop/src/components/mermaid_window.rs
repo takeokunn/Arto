@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use sha2::{Digest, Sha256};
 
 use crate::assets::MAIN_SCRIPT;
+use crate::components::icon::{Icon, IconName};
 use crate::components::theme_selector::ThemeSelector;
 use crate::theme::Theme;
 
@@ -52,6 +53,7 @@ pub fn MermaidWindow(props: MermaidWindowProps) -> Element {
 
                 div {
                     class: "mermaid-window-controls",
+                    CopyImageButton {}
                     ThemeSelector { current_theme }
                 }
             }
@@ -134,4 +136,65 @@ fn use_zoom_update_handler(zoom_level: Signal<i32>) {
             }
         });
     });
+}
+
+/// Copy status for visual feedback
+#[derive(Clone, Copy, PartialEq, Default)]
+enum CopyStatus {
+    #[default]
+    Idle,
+    Success,
+    Error,
+}
+
+/// Copy image button component
+#[component]
+fn CopyImageButton() -> Element {
+    let mut copy_status = use_signal(|| CopyStatus::Idle);
+
+    let handle_click = move |_| {
+        spawn(async move {
+            // Call JavaScript to copy the diagram as image
+            let mut eval = document::eval(indoc::indoc! {r#"
+                (async () => {
+                    if (window.mermaidWindowController) {
+                        const success = await window.mermaidWindowController.copyAsImage();
+                        dioxus.send(success);
+                    } else {
+                        dioxus.send(false);
+                    }
+                })();
+            "#});
+
+            // Receive the result from JavaScript
+            match eval.recv::<bool>().await {
+                Ok(true) => {
+                    copy_status.set(CopyStatus::Success);
+                }
+                _ => {
+                    copy_status.set(CopyStatus::Error);
+                }
+            }
+
+            // Reset after 2 seconds
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            copy_status.set(CopyStatus::Idle);
+        });
+    };
+
+    let (icon, extra_class) = match *copy_status.read() {
+        CopyStatus::Idle => (IconName::Photo, ""),
+        CopyStatus::Success => (IconName::Check, "copied"),
+        CopyStatus::Error => (IconName::Close, "error"),
+    };
+
+    rsx! {
+        button {
+            class: "viewer-control-btn {extra_class}",
+            "aria-label": "Copy diagram as image",
+            title: "Copy diagram as image",
+            onclick: handle_click,
+            Icon { name: icon, size: 18 }
+        }
+    }
 }

@@ -3,16 +3,20 @@
 .header {
   flex-shrink: 0;
   align-items: center;
-  background: transparent;
-  border-bottom: none;
+  background: var(--bg-color);
   display: flex;
   justify-content: space-between;
   padding: 10px 20px;
+  /* Stay above search bar */
+  position: relative;
+  z-index: 60;
 }
 
 .header-left {
   color: var(--text-color);
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-size: 14px;
   font-weight: 500;
   display: flex;
@@ -22,6 +26,7 @@
 
 .header-left .sidebar-toggle-button,
 .header-left .nav-button {
+  flex-shrink: 0;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -64,9 +69,14 @@
 
 .header-left .file-name {
   margin-left: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .header-left .copy-button {
+  flex-shrink: 0;
   opacity: 0.5;
   transition: opacity 0.2s, color 0.2s;
 
@@ -84,6 +94,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .header-right .nav-button {
@@ -122,4 +133,34 @@
 
 .header-right .reload-button.reloading .icon {
   animation: spin 0.6s ease-in-out;
+}
+
+/* TOC toggle button - matches sidebar toggle style */
+.header-right .toc-toggle-button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  transition: all 0.2s;
+  width: 28px;
+  height: 28px;
+
+  &:hover {
+    border-color: var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-color);
+  }
+
+  .icon {
+    opacity: 0.5;
+  }
+
+  &.active .icon {
+    opacity: 1;
+  }
 }

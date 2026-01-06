@@ -24,6 +24,8 @@ pub struct FileWatcher {
 enum FileWatcherCommand {
     Watch(PathBuf, Sender<()>),
     Unwatch(PathBuf),
+    WatchDirectory(PathBuf, Sender<()>),
+    UnwatchDirectory(PathBuf),
 }
 
 impl FileWatcher {
@@ -33,9 +35,14 @@ impl FileWatcher {
         // Spawn a dedicated thread for the file watcher
         std::thread::spawn(move || {
             // Map of file paths to their notification channels
-            let watchers: Arc<Mutex<HashMap<PathBuf, Vec<Sender<()>>>>> =
+            let file_watchers: Arc<Mutex<HashMap<PathBuf, Vec<Sender<()>>>>> =
                 Arc::new(Mutex::new(HashMap::new()));
-            let watchers_clone = watchers.clone();
+            let file_watchers_clone = file_watchers.clone();
+
+            // Map of directory paths to their notification channels (for recursive watching)
+            let dir_watchers: Arc<Mutex<HashMap<PathBuf, Vec<Sender<()>>>>> =
+                Arc::new(Mutex::new(HashMap::new()));
+            let dir_watchers_clone = dir_watchers.clone();
 
             // Create a debouncer with 500ms delay
             let mut debouncer: Debouncer<
@@ -54,13 +61,40 @@ impl FileWatcher {
                             }
                         }
 
-                        // Notify all watchers for changed files
-                        let watchers = watchers_clone.lock().unwrap();
-                        for path in changed_paths {
-                            if let Some(senders) = watchers.get(&path) {
+                        // Notify file watchers (exact path match)
+                        let file_watchers = file_watchers_clone.lock().unwrap();
+                        for path in &changed_paths {
+                            if let Some(senders) = file_watchers.get(path) {
                                 tracing::debug!("File changed: {:?}", path);
                                 for sender in senders {
                                     let _ = sender.blocking_send(());
+                                }
+                            }
+                        }
+                        drop(file_watchers);
+
+                        // Notify directory watchers (path starts with watched directory)
+                        let dir_watchers = dir_watchers_clone.lock().unwrap();
+                        let mut notified_dirs = std::collections::HashSet::new();
+                        for changed_path in &changed_paths {
+                            // Skip .git directory changes (too noisy)
+                            if changed_path.components().any(|c| c.as_os_str() == ".git") {
+                                continue;
+                            }
+
+                            for (watched_dir, senders) in dir_watchers.iter() {
+                                if changed_path.starts_with(watched_dir)
+                                    && !notified_dirs.contains(watched_dir)
+                                {
+                                    tracing::trace!(
+                                        ?watched_dir,
+                                        ?changed_path,
+                                        "Directory content changed"
+                                    );
+                                    for sender in senders {
+                                        let _ = sender.blocking_send(());
+                                    }
+                                    notified_dirs.insert(watched_dir.clone());
                                 }
                             }
                         }
@@ -85,7 +119,7 @@ impl FileWatcher {
             loop {
                 match command_rx.blocking_recv() {
                     Some(FileWatcherCommand::Watch(path, tx)) => {
-                        let mut watchers = watchers.lock().unwrap();
+                        let mut watchers = file_watchers.lock().unwrap();
                         let is_first = !watchers.contains_key(&path);
 
                         watchers.entry(path.clone()).or_default().push(tx);
@@ -100,7 +134,7 @@ impl FileWatcher {
                         }
                     }
                     Some(FileWatcherCommand::Unwatch(path)) => {
-                        let mut watchers = watchers.lock().unwrap();
+                        let mut watchers = file_watchers.lock().unwrap();
                         if let Some(senders) = watchers.get_mut(&path) {
                             senders.pop();
                             // If no more watchers for this file, stop watching
@@ -110,6 +144,40 @@ impl FileWatcher {
                                     tracing::error!("Failed to unwatch file {:?}: {:?}", path, e);
                                 } else {
                                     tracing::info!("Stopped watching file: {:?}", path);
+                                }
+                            }
+                        }
+                    }
+                    Some(FileWatcherCommand::WatchDirectory(path, tx)) => {
+                        let mut watchers = dir_watchers.lock().unwrap();
+                        let is_first = !watchers.contains_key(&path);
+
+                        watchers.entry(path.clone()).or_default().push(tx);
+
+                        // Only start watching if this is the first watcher for this directory
+                        if is_first {
+                            if let Err(e) = debouncer.watch(&path, RecursiveMode::Recursive) {
+                                tracing::error!("Failed to watch directory {:?}: {:?}", path, e);
+                            } else {
+                                tracing::info!("Started watching directory: {:?}", path);
+                            }
+                        }
+                    }
+                    Some(FileWatcherCommand::UnwatchDirectory(path)) => {
+                        let mut watchers = dir_watchers.lock().unwrap();
+                        if let Some(senders) = watchers.get_mut(&path) {
+                            senders.pop();
+                            // If no more watchers for this directory, stop watching
+                            if senders.is_empty() {
+                                watchers.remove(&path);
+                                if let Err(e) = debouncer.unwatch(&path) {
+                                    tracing::error!(
+                                        "Failed to unwatch directory {:?}: {:?}",
+                                        path,
+                                        e
+                                    );
+                                } else {
+                                    tracing::info!("Stopped watching directory: {:?}", path);
                                 }
                             }
                         }
@@ -141,6 +209,26 @@ impl FileWatcher {
         let path = path.into();
         self.command_tx
             .send(FileWatcherCommand::Unwatch(path))
+            .await
+            .map_err(|_| WatcherError::CommandFailed)
+    }
+
+    /// Watch a directory recursively and receive notifications when any file changes
+    pub async fn watch_directory(&self, path: impl Into<PathBuf>) -> WatcherResult<Receiver<()>> {
+        let path = path.into();
+        let (tx, rx) = mpsc::channel(100);
+        self.command_tx
+            .send(FileWatcherCommand::WatchDirectory(path, tx))
+            .await
+            .map_err(|_| WatcherError::CommandFailed)?;
+        Ok(rx)
+    }
+
+    /// Stop watching a directory
+    pub async fn unwatch_directory(&self, path: impl Into<PathBuf>) -> WatcherResult<()> {
+        let path = path.into();
+        self.command_tx
+            .send(FileWatcherCommand::UnwatchDirectory(path))
             .await
             .map_err(|_| WatcherError::CommandFailed)
     }

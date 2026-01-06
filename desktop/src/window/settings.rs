@@ -30,6 +30,11 @@ pub struct SidebarPreference {
     pub show_all_files: bool,
 }
 
+pub struct TocPreference {
+    pub open: bool,
+    pub width: f64,
+}
+
 pub struct WindowSizePreference {
     pub size: LogicalSize<u32>,
 }
@@ -244,6 +249,26 @@ pub fn get_sidebar_preference(is_first_window: bool) -> SidebarPreference {
     )
 }
 
+pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
+    let cfg = CONFIG.read();
+    choose_by_behavior(
+        is_first_window,
+        cfg.toc.on_startup,
+        cfg.toc.on_new_window,
+        || TocPreference {
+            open: cfg.toc.default_open,
+            width: cfg.toc.default_width,
+        },
+        || {
+            let state = LAST_FOCUSED_STATE.read();
+            TocPreference {
+                open: state.toc_open,
+                width: state.toc_width,
+            }
+        },
+    )
+}
+
 pub fn get_window_size_preference(is_first_window: bool) -> WindowSizePreference {
     let (_, _, size) = resolve_window_settings(is_first_window);
     let (_, screen_size) = get_current_display_bounds()
@@ -322,6 +347,20 @@ mod tests {
     fn test_get_sidebar_preference_new_window() {
         let result = get_sidebar_preference(false);
         // Should return a SidebarPreference
+        assert!(result.width > 0.0);
+    }
+
+    #[test]
+    fn test_get_toc_preference_first_window() {
+        let result = get_toc_preference(true);
+        // Should return a TocPreference
+        assert!(result.width > 0.0);
+    }
+
+    #[test]
+    fn test_get_toc_preference_new_window() {
+        let result = get_toc_preference(false);
+        // Should return a TocPreference
         assert!(result.width > 0.0);
     }
 

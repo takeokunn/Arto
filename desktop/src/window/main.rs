@@ -46,6 +46,8 @@ pub struct CreateMainWindowConfigParams {
     pub sidebar_open: bool,
     pub sidebar_width: f64,
     pub sidebar_show_all_files: bool,
+    pub toc_open: bool,
+    pub toc_width: f64,
     pub size: LogicalSize<u32>,
     pub position: LogicalPosition<i32>,
     /// Skip position shifting for overlap avoidance.
@@ -60,6 +62,7 @@ impl CreateMainWindowConfigParams {
         let directory_pref = settings::get_directory_preference(is_first_window);
         let theme_pref = settings::get_theme_preference(is_first_window);
         let sidebar_pref = settings::get_sidebar_preference(is_first_window);
+        let toc_pref = settings::get_toc_preference(is_first_window);
         let size_pref = settings::get_window_size_preference(is_first_window);
         let position_pref = settings::get_window_position_preference(is_first_window);
 
@@ -69,6 +72,8 @@ impl CreateMainWindowConfigParams {
             sidebar_open: sidebar_pref.open,
             sidebar_width: sidebar_pref.width,
             sidebar_show_all_files: sidebar_pref.show_all_files,
+            toc_open: toc_pref.open,
+            toc_width: toc_pref.width,
             size: size_pref.size,
             position: position_pref.position,
             skip_position_shift: false,
@@ -232,6 +237,8 @@ pub(crate) async fn create_new_main_window(
             sidebar_open: params.sidebar_open,
             sidebar_width: params.sidebar_width,
             sidebar_show_all_files: params.sidebar_show_all_files,
+            toc_open: params.toc_open,
+            toc_width: params.toc_width,
         },
     );
 

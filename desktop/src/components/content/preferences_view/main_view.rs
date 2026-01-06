@@ -1,6 +1,6 @@
 use super::tabs::{
     about_tab::AboutTab, directory_tab::DirectoryTab, sidebar_tab::SidebarTab, theme_tab::ThemeTab,
-    window_position_tab::WindowPositionTab, window_size_tab::WindowSizeTab,
+    toc_tab::TocTab, window_position_tab::WindowPositionTab, window_size_tab::WindowSizeTab,
 };
 use crate::components::icon::{Icon, IconName};
 use crate::config::{Config, CONFIG};
@@ -16,6 +16,7 @@ pub enum PreferencesTab {
     WindowPosition,
     WindowSize,
     Sidebar,
+    Toc,
     Directory,
     About,
 }
@@ -122,6 +123,15 @@ pub fn PreferencesView() -> Element {
                         span { "Sidebar" }
                     }
                     button {
+                        class: if current_tab == PreferencesTab::Toc { "nav-tab active" } else { "nav-tab" },
+                        onclick: move |_| {
+                            active_tab.set(PreferencesTab::Toc);
+                            *LAST_PREFERENCES_TAB.write() = PreferencesTab::Toc;
+                        },
+                        Icon { name: IconName::List, size: 18 }
+                        span { "Table of Contents" }
+                    }
+                    button {
                         class: if current_tab == PreferencesTab::Directory { "nav-tab active" } else { "nav-tab" },
                         onclick: move |_| {
                             active_tab.set(PreferencesTab::Directory);
@@ -198,6 +208,13 @@ pub fn PreferencesView() -> Element {
                                 config,
                                 has_changes,
                                 current_sidebar_width: state.sidebar.read().width,
+                            }
+                        },
+                        PreferencesTab::Toc => rsx! {
+                            TocTab {
+                                config,
+                                has_changes,
+                                current_toc_width: *state.toc_width.read(),
                             }
                         },
                         PreferencesTab::Directory => rsx! {
