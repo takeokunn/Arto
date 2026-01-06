@@ -127,6 +127,62 @@ export function restoreSelection(): void {
   }
 }
 
+const MENU_MARGIN = 8;
+
+/**
+ * Observe for context menu appearing and adjust its position to stay within viewport.
+ * Uses MutationObserver to detect when menu is added to DOM, then measures and repositions.
+ */
+function setupMenuPositionAdjuster(): void {
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node instanceof HTMLElement && node.classList.contains("content-context-menu")) {
+          adjustMenuPosition(node);
+          return;
+        }
+      }
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+/**
+ * Adjust menu position based on its actual rendered size.
+ */
+function adjustMenuPosition(menu: HTMLElement): void {
+  const rect = menu.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  let newLeft: number | null = null;
+  let newTop: number | null = null;
+
+  // Flip horizontally if menu overflows right edge
+  if (rect.right + MENU_MARGIN > vw) {
+    // Move menu to open left of its current right edge
+    newLeft = Math.max(MENU_MARGIN, rect.left - rect.width);
+  }
+
+  // Flip vertically if menu overflows bottom edge
+  if (rect.bottom + MENU_MARGIN > vh) {
+    // Move menu to open above its current bottom edge
+    newTop = Math.max(MENU_MARGIN, rect.top - rect.height);
+  }
+
+  // Apply adjustments
+  if (newLeft !== null) {
+    menu.style.left = `${newLeft}px`;
+  }
+  if (newTop !== null) {
+    menu.style.top = `${newTop}px`;
+  }
+}
+
+// Initialize the position adjuster
+setupMenuPositionAdjuster();
+
 /**
  * Setup context menu event listener on the markdown viewer
  */
@@ -143,6 +199,7 @@ export function setup(sendToRust: (data: ContextMenuData) => void): void {
     event.preventDefault();
 
     // Detect context and send to Rust
+    // Position adjustment is handled by MutationObserver after menu renders
     const context = detectContext(target);
     const { hasSelection, selectedText } = getTextSelection();
     const data: ContextMenuData = {
