@@ -97,7 +97,7 @@ fn render_frontmatter_table(yaml: &YamlValue) -> String {
     }
 
     format!(
-        r#"<details class="frontmatter" open>
+        r#"<details class="frontmatter">
 <summary class="frontmatter-summary">Frontmatter</summary>
 <table class="frontmatter-table">
 <tbody>
@@ -955,7 +955,7 @@ mod tests {
 
         let (html, content) = extract_and_render_frontmatter(markdown);
 
-        assert!(html.contains(r#"<details class="frontmatter""#));
+        assert!(html.contains(r#"<details class="frontmatter">"#));
         assert!(html.contains(r#"<table class="frontmatter-table""#));
         assert!(html.contains("<th>title</th>"));
         assert!(html.contains("<td>Test Document</td>"));
@@ -1038,6 +1038,9 @@ mod tests {
         // Frontmatter table should come before the heading
         let frontmatter_pos = result.find("frontmatter-table").unwrap();
         let heading_pos = result.find("<h1>").unwrap();
-        assert!(frontmatter_pos < heading_pos, "Frontmatter should appear before content");
+        assert!(
+            frontmatter_pos < heading_pos,
+            "Frontmatter should appear before content"
+        );
     }
 }
