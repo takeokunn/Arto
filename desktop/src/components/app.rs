@@ -229,60 +229,29 @@ pub fn App(
         }
     });
 
-    // Listen for tab transfer requests (target-side handler for context menu)
+    // Listen for tab transfer events (from drag-and-drop and context menu "Move to Window")
     use_future(move || async move {
-        let mut rx = crate::events::TAB_TRANSFER_REQUEST.subscribe();
+        let mut rx = crate::events::TRANSFER_TAB_TO_WINDOW.subscribe();
         let current_window_id = window().id();
 
-        while let Ok(request) = rx.recv().await {
-            // Only process requests targeted to this window
-            if request.target_window_id != current_window_id {
+        while let Ok((target_window_id, target_index, tab)) = rx.recv().await {
+            // Only process transfers targeted to this window
+            if target_window_id != current_window_id {
                 continue;
             }
 
-            tracing::debug!(?request, "Received tab transfer request");
+            tracing::debug!(?target_window_id, ?target_index, "Received tab transfer");
 
-            // Phase 1: Prepare - validate request
-            let can_accept = {
-                // Check if window still exists and is visible
-                // Could add more checks here:
-                // - Max tab limit
-                // - Duplicate tab check
-                // - etc.
+            // Insert the tab at the specified position
+            let tabs_len = state.tabs.read().len();
+            let insert_index = target_index.unwrap_or(tabs_len);
+            let new_tab_index = state.insert_tab(tab, insert_index);
+            state.switch_to_tab(new_tab_index);
 
-                window().is_visible()
-            };
+            // Focus this window after receiving the tab
+            window().set_focus();
 
-            if can_accept {
-                // Phase 2a: Commit - insert tab and send Ack
-                let tabs_len = state.tabs.read().len();
-                let insert_index = request.target_index.unwrap_or(tabs_len);
-                let new_tab_index = state.insert_tab(request.tab.clone(), insert_index);
-                state.switch_to_tab(new_tab_index);
-
-                // Focus this window after receiving the tab
-                window().set_focus();
-
-                crate::events::TAB_TRANSFER_RESPONSE
-                    .send(crate::events::TabTransferResponse::Ack {
-                        request_id: request.request_id,
-                        source_window_id: request.source_window_id,
-                    })
-                    .ok();
-
-                tracing::info!("Tab transfer accepted and committed");
-            } else {
-                // Phase 2b: Rollback - send Nack
-                crate::events::TAB_TRANSFER_RESPONSE
-                    .send(crate::events::TabTransferResponse::Nack {
-                        request_id: request.request_id,
-                        source_window_id: request.source_window_id,
-                        reason: "Window is not ready to accept tabs".to_string(),
-                    })
-                    .ok();
-
-                tracing::warn!("Tab transfer rejected");
-            }
+            tracing::info!("Tab transfer completed");
         }
     });
 
@@ -709,14 +678,11 @@ fn handle_drop_in_tab_bar(
     active: &drag::GlobalActiveDrag,
     is_single_tab: bool,
 ) {
-    use crate::events::{TabTransferRequest, TAB_TRANSFER_REQUEST};
-
     let (Some(target_wid), Some(dragged)) = (active.target_window_id, drag::get_dragged_tab())
     else {
         return;
     };
 
-    let source_wid = dragged.source_window_id;
     let current_wid = window().id();
 
     if target_wid == current_wid {
@@ -732,15 +698,9 @@ fn handle_drop_in_tab_bar(
         }
     } else {
         // Drop in another window - send transfer request
-        let request = TabTransferRequest {
-            source_window_id: source_wid,
-            target_window_id: target_wid,
-            tab: dragged.tab,
-            target_index: Some(active.target_index),
-            source_directory: state.sidebar.read().root_directory.clone(),
-            request_id: uuid::Uuid::new_v4(),
-        };
-        TAB_TRANSFER_REQUEST.send(request).ok();
+        crate::events::TRANSFER_TAB_TO_WINDOW
+            .send((target_wid, Some(active.target_index), dragged.tab))
+            .ok();
         crate::window::main::focus_window(target_wid);
 
         if is_single_tab {

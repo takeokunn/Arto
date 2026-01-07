@@ -419,15 +419,15 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
         let path = path.clone();
         move |target_id: dioxus::desktop::tao::window::WindowId| {
             let path = path.clone();
-            spawn(async move {
-                if is_dir {
-                    // For directories, broadcast to change root directory
-                    let _ = crate::events::OPEN_DIRECTORY_IN_WINDOW.send((target_id, path));
-                } else {
-                    // For files, broadcast to open file
-                    let _ = crate::events::OPEN_FILE_IN_WINDOW.send((target_id, path));
-                }
-            });
+            if is_dir {
+                // For directories, broadcast to change root directory
+                let _ = crate::events::OPEN_DIRECTORY_IN_WINDOW.send((target_id, path));
+            } else {
+                // For files, broadcast to open file
+                let _ = crate::events::OPEN_FILE_IN_WINDOW.send((target_id, path));
+            }
+            // Focus the target window
+            crate::window::main::focus_window(target_id);
             show_context_menu.set(false);
         }
     };
@@ -465,6 +465,17 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                 class: "sidebar-tree-node-content",
                 style: "{indent_style}",
                 oncontextmenu: handle_context_menu,
+                onclick: {
+                    let path = path.clone();
+                    move |_| {
+                        // Click anywhere on the row: open file (files) or set as root (directories)
+                        if is_dir {
+                            state.set_root_directory(&path);
+                        } else {
+                            state.open_file(&path);
+                        }
+                    }
+                },
 
                 // Directory: chevron toggles expansion, folder+label changes root
                 if is_dir {
