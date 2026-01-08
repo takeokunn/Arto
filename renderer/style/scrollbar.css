@@ -10,7 +10,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 1px;
+  border-radius: 2px;
   transition: background 0.2s ease;
 }
 
