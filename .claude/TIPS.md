@@ -282,7 +282,7 @@ rsx! {
 ```rust
 pub static CONFIG: LazyLock<Mutex<Config>> = ...;
 pub static LAST_SELECTED_THEME: LazyLock<Mutex<ThemePreference>> = ...;
-pub static FILE_OPEN_BROADCAST: LazyLock<broadcast::Sender<PathBuf>> = ...;
+pub static TRANSFER_TAB_TO_WINDOW: LazyLock<broadcast::Sender<...>> = ...;
 ```
 
 **2. Context-Provided State** (per-window):
@@ -751,49 +751,13 @@ pub struct PersistedState {
 
 ### Broadcast Channel Architecture
 
-**Three-layer event propagation (OPEN_EVENT_RECEIVER → FILE_OPEN_BROADCAST → App components):**
+**Broadcast channels for cross-window coordination (`events.rs`):**
 
-**Layer 1: mpsc channel (OS → Dioxus context)**
-- `OPEN_EVENT_RECEIVER` receives OS events (File Open, App Reopen)
-- Single consumer: `MainApp` component
-- `take()` ensures one-time consumption
+- `TRANSFER_TAB_TO_WINDOW` - Tab drag-and-drop, context menu "Move to Window"
+- `ACTIVE_DRAG_UPDATE` - Drag state updates for visual feedback
+- `OPEN_FILE_IN_WINDOW` / `OPEN_DIRECTORY_IN_WINDOW` - Context menu "Open in Window"
 
-**Layer 2: broadcast channels (MainApp → multiple windows)**
-- `FILE_OPEN_BROADCAST` / `DIRECTORY_OPEN_BROADCAST`
-- Producer: `MainApp` component
-- Consumers: All `App` components (each window subscribes)
-
-**Layer 3: Focus-based filtering**
-- Each window's `App` component checks `window().is_focused()`
-- Only focused window processes the broadcast event
-
-**Why this architecture:**
-- OS event handler runs on main thread (outside Dioxus context)
-- mpsc bridges to Dioxus context
-- broadcast distributes to multiple windows
-- Focus check ensures only active window responds
-
-**Key pattern:**
-```rust
-// MainApp: OS event → broadcast
-components::main_app::OpenEvent::File(file) => {
-    if !window_manager::has_any_main_windows() {
-        window_manager::create_new_main_window(Some(file), None, false);
-    } else {
-        let _ = FILE_OPEN_BROADCAST.send(file);
-    }
-}
-
-// App: subscribe and filter by focus
-let mut rx = FILE_OPEN_BROADCAST.subscribe();
-spawn(async move {
-    while let Ok(file) = rx.recv().await {
-        if window().is_focused() {  // ← Critical filter
-            state.open_file(file);
-        }
-    }
-});
-```
+**OS events (Finder/CLI) always create new windows** - handled directly in `main_app.rs`.
 
 #### Tab Transfer Between Windows
 
@@ -891,18 +855,8 @@ How many files use this code?
 │
 └─ 3+ files
    └─ Create independent module
-      Example: FILE_OPEN_BROADCAST in events.rs (main_app.rs → multiple app.rs)
+      Example: TRANSFER_TAB_TO_WINDOW in events.rs (used by tab_item.rs, tab_bar.rs, app.rs)
 ```
-
-**Real example from session:**
-
-Initial (wrong):
-- `state/globals.rs` contained ALL event-related code
-- Problem: `OPEN_EVENT_RECEIVER` (2 files) mixed with `FILE_OPEN_BROADCAST` (many files)
-
-Final (correct):
-- `components/main_app.rs`: `OpenEvent` + `OPEN_EVENT_RECEIVER` (main.rs ↔ main_app.rs only)
-- `events.rs`: `FILE_OPEN_BROADCAST` + `DIRECTORY_OPEN_BROADCAST` (main_app.rs → multiple app.rs)
 
 **Insight**: Don't group by "what it is" (globals, events, state). Group by "where it's used" (2 files vs many files).
 
@@ -969,32 +923,14 @@ div {
 
 **When designing multi-layer systems, validate each layer independently:**
 
-**Bad approach:**
-```rust
-// Single module with mixed responsibilities
-pub static OPEN_EVENT_RECEIVER: ...;       // Layer 1: OS → Dioxus
-pub static FILE_OPEN_BROADCAST: ...;        // Layer 2: MainApp → Apps
-```
-
-**Good approach - separate by layer:**
-```rust
-// Layer 1: OS → Dioxus (main_app.rs)
-pub enum OpenEvent { ... }
-pub static OPEN_EVENT_RECEIVER: Mutex<Option<Receiver<OpenEvent>>> = ...;
-
-// Layer 2: MainApp → Apps (events.rs)
-pub static FILE_OPEN_BROADCAST: LazyLock<broadcast::Sender<PathBuf>> = ...;
-```
-
 **Questions to ask:**
-1. What are the communication boundaries? (OS/Dioxus, MainApp/Apps)
-2. What crosses each boundary? (OpenEvent, PathBuf)
-3. Who are the senders/receivers? (1:1 vs 1:N)
-4. Where should the channel live? (Closer to the unique side)
+1. What are the communication boundaries? (OS/Dioxus, component/component)
+2. Who are the senders/receivers? (1:1 vs 1:N)
+3. Where should the channel live? (Closer to the unique side)
 
-**Pattern from session:**
-- Layer 1 (mpsc): OS event handler → single MainApp → use `Mutex<Option<Receiver>>`
-- Layer 2 (broadcast): MainApp → multiple Apps → use `LazyLock<broadcast::Sender>`
+**Pattern:**
+- 1:1 communication → `mpsc` or direct function calls
+- 1:N communication → `broadcast` channel
 - Don't mix layers in the same module just because they're "event-related"
 
 ---

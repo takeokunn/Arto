@@ -19,8 +19,7 @@ use super::toc_panel::TocPanel;
 use crate::assets::MAIN_SCRIPT;
 use crate::drag;
 use crate::events::{
-    ActiveDragUpdate, ACTIVE_DRAG_UPDATE, DIRECTORY_OPEN_BROADCAST, FILE_OPEN_BROADCAST,
-    OPEN_DIRECTORY_IN_WINDOW, OPEN_FILE_IN_WINDOW,
+    ActiveDragUpdate, ACTIVE_DRAG_UPDATE, OPEN_DIRECTORY_IN_WINDOW, OPEN_FILE_IN_WINDOW,
 };
 use crate::menu;
 use crate::state::{AppState, PersistedState, Tab, LAST_FOCUSED_STATE};
@@ -208,12 +207,6 @@ pub fn App(
         }
         _ => {}
     });
-
-    // Listen for file open broadcasts from background process
-    setup_file_open_listener(state);
-
-    // Listen for directory open broadcasts from background process
-    setup_directory_open_listener(state);
 
     // Listen for cross-window file/directory open events (from sidebar context menu)
     setup_cross_window_open_listeners(state);
@@ -432,40 +425,6 @@ fn sync_window_metrics(
         let latest_size = *state.size.read();
         debounced_metrics.schedule(latest_position, latest_size);
     }
-}
-
-/// Setup listener for file open broadcasts from the background process
-fn setup_file_open_listener(mut state: AppState) {
-    use_future(move || async move {
-        let mut rx = FILE_OPEN_BROADCAST.subscribe();
-
-        while let Ok(file) = rx.recv().await {
-            // Only handle in the focused window
-            if window().is_focused() {
-                tracing::info!("Opening file from broadcast: {:?}", file);
-                state.open_file(file);
-            }
-        }
-    });
-}
-
-/// Setup listener for directory open broadcasts from the background process
-fn setup_directory_open_listener(mut state: AppState) {
-    use_future(move || async move {
-        let mut rx = DIRECTORY_OPEN_BROADCAST.subscribe();
-
-        while let Ok(dir) = rx.recv().await {
-            // Only handle in the focused window
-            if window().is_focused() {
-                tracing::info!("Opening directory from broadcast: {:?}", dir);
-                state.set_root_directory(dir.clone());
-                // Optionally show the sidebar if it's hidden
-                if !state.sidebar.read().open {
-                    state.toggle_sidebar();
-                }
-            }
-        }
-    });
 }
 
 /// Setup listeners for cross-window file/directory open events (from sidebar context menu)

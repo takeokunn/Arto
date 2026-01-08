@@ -1,4 +1,3 @@
-use crate::events::{DIRECTORY_OPEN_BROADCAST, FILE_OPEN_BROADCAST};
 use crate::state::Tab;
 use crate::window as window_manager;
 use crate::window::{settings, CreateMainWindowConfigParams};
@@ -40,32 +39,27 @@ fn handle_open_event(event: OpenEvent) {
 
     match event {
         OpenEvent::File(file) => {
-            if window_manager::has_any_main_windows() {
-                let _ = FILE_OPEN_BROADCAST.send(file);
-            } else {
-                spawn(async move {
-                    window_manager::create_new_main_window_with_file(
-                        file,
-                        CreateMainWindowConfigParams::default(),
-                    )
-                    .await;
-                });
-            }
+            // Always create a new window for OS events (Finder, CLI, etc.)
+            spawn(async move {
+                window_manager::create_new_main_window_with_file(
+                    file,
+                    CreateMainWindowConfigParams::default(),
+                )
+                .await;
+            });
         }
         OpenEvent::Directory(dir) => {
-            if window_manager::has_any_main_windows() {
-                let _ = DIRECTORY_OPEN_BROADCAST.send(dir);
-            } else {
-                spawn(async move {
-                    let params = CreateMainWindowConfigParams {
-                        directory: Some(dir),
-                        ..Default::default()
-                    };
-                    window_manager::create_new_main_window_with_empty(params).await;
-                });
-            }
+            // Always create a new window for OS events (Finder, CLI, etc.)
+            spawn(async move {
+                let params = CreateMainWindowConfigParams {
+                    directory: Some(dir),
+                    ..Default::default()
+                };
+                window_manager::create_new_main_window_with_empty(params).await;
+            });
         }
         OpenEvent::Reopen => {
+            // Try to focus existing window first, create new if none exist
             if !window_manager::focus_last_focused_main_window() {
                 spawn(async move {
                     window_manager::create_new_main_window_with_empty(

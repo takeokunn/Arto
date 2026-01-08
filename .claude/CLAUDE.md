@@ -321,31 +321,7 @@ use_effect(move || {
 
 Arto uses broadcast channels for multi-window features. See `desktop/src/events.rs` for detailed architecture documentation.
 
-#### 1. OS Event Distribution
-
-**FILE_OPEN_BROADCAST / DIRECTORY_OPEN_BROADCAST:**
-- OS sends file open events to main process
-- Entrypoint (`MainApp`) component broadcasts to all windows
-- Focused window handles the event (focus-based filtering)
-
-```rust
-// MainApp: Broadcast to all windows
-if window_manager::has_any_main_windows() {
-    FILE_OPEN_BROADCAST.send(file).ok();
-}
-
-// App: Subscribe and filter by focus
-let mut rx = FILE_OPEN_BROADCAST.subscribe();
-spawn_forever(async move {
-    while let Ok(file) = rx.recv().await {
-        if window().is_focused() {
-            state.open_file(file);
-        }
-    }
-});
-```
-
-#### 2. Tab Transfers
+#### 1. Tab Transfers
 
 **TRANSFER_TAB_TO_WINDOW:**
 - Fire-and-forget pattern for moving tabs between windows
@@ -371,7 +347,7 @@ use_future(move || async move {
 });
 ```
 
-#### 3. Drag State Updates
+#### 2. Drag State Updates
 
 **ACTIVE_DRAG_UPDATE:**
 - Notifies all windows when drag state changes
