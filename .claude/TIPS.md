@@ -282,7 +282,7 @@ rsx! {
 ```rust
 pub static CONFIG: LazyLock<Mutex<Config>> = ...;
 pub static LAST_SELECTED_THEME: LazyLock<Mutex<ThemePreference>> = ...;
-pub static FILE_OPEN_BROADCAST: LazyLock<broadcast::Sender<PathBuf>> = ...;
+pub static TRANSFER_TAB_TO_WINDOW: LazyLock<broadcast::Sender<...>> = ...;
 ```
 
 **2. Context-Provided State** (per-window):
@@ -534,6 +534,28 @@ tracing::debug!("Processing batch of {} items", items.len());
 
 **Use sparingly:** Only log when information would be lost otherwise.
 
+### 5. Over-Engineering Local Communication
+
+**❌ Don't:**
+- Add timeout/retry logic for local IPC (same-process communication)
+- Use request/response patterns for fire-and-forget operations
+- Implement acknowledgment systems for desktop app window communication
+
+**✅ Do:**
+```rust
+// Simple fire-and-forget for local tab transfer
+crate::events::TRANSFER_TAB_TO_WINDOW
+    .send((target_window_id, index, tab))
+    .ok();
+```
+
+**Why:** Desktop apps have different requirements than distributed systems:
+- No network latency (same process, broadcast channel)
+- No need for timeout/retry (if window exists, it will receive the event)
+- Simpler is better (removed ~150 lines of Two-Phase Commit logic)
+
+**Real example:** Tab transfer previously used `TabTransferRequest`/`TabTransferResponse` with UUID tracking and timeout handling. Simplified to single broadcast channel `TRANSFER_TAB_TO_WINDOW`, reducing complexity without losing functionality (tab history still preserved by sending full `Tab` object).
+
 ---
 
 ## Quick Reference
@@ -729,46 +751,63 @@ pub struct PersistedState {
 
 ### Broadcast Channel Architecture
 
-**Three-layer event propagation (OPEN_EVENT_RECEIVER → FILE_OPEN_BROADCAST → App components):**
+**Broadcast channels for cross-window coordination (`events.rs`):**
 
-**Layer 1: mpsc channel (OS → Dioxus context)**
-- `OPEN_EVENT_RECEIVER` receives OS events (File Open, App Reopen)
-- Single consumer: `MainApp` component
-- `take()` ensures one-time consumption
+- `TRANSFER_TAB_TO_WINDOW` - Tab drag-and-drop, context menu "Move to Window"
+- `ACTIVE_DRAG_UPDATE` - Drag state updates for visual feedback
+- `OPEN_FILE_IN_WINDOW` / `OPEN_DIRECTORY_IN_WINDOW` - Context menu "Open in Window"
 
-**Layer 2: broadcast channels (MainApp → multiple windows)**
-- `FILE_OPEN_BROADCAST` / `DIRECTORY_OPEN_BROADCAST`
-- Producer: `MainApp` component
-- Consumers: All `App` components (each window subscribes)
+**OS events (Finder/CLI) always create new windows** - handled directly in `main_app.rs`.
 
-**Layer 3: Focus-based filtering**
-- Each window's `App` component checks `window().is_focused()`
-- Only focused window processes the broadcast event
+#### Tab Transfer Between Windows
 
-**Why this architecture:**
-- OS event handler runs on main thread (outside Dioxus context)
-- mpsc bridges to Dioxus context
-- broadcast distributes to multiple windows
-- Focus check ensures only active window responds
+**Fire-and-forget pattern for tab transfers (drag-and-drop and context menu):**
 
-**Key pattern:**
 ```rust
-// MainApp: OS event → broadcast
-components::main_app::OpenEvent::File(file) => {
-    if !window_manager::has_any_main_windows() {
-        window_manager::create_new_main_window(Some(file), None, false);
-    } else {
-        let _ = FILE_OPEN_BROADCAST.send(file);
-    }
-}
+// Transfer a tab with full history preservation
+crate::events::TRANSFER_TAB_TO_WINDOW
+    .send((target_window_id, target_index, tab))
+    .ok();
 
-// App: subscribe and filter by focus
-let mut rx = FILE_OPEN_BROADCAST.subscribe();
-spawn(async move {
-    while let Ok(file) = rx.recv().await {
-        if window().is_focused() {  // ← Critical filter
-            state.open_file(file);
+// Auto-focus target window after transfer
+crate::window::main::focus_window(target_window_id);
+```
+
+**Why fire-and-forget:**
+- Desktop app with local IPC (no network latency)
+- No need for acknowledgment/timeout logic
+- Simpler than request/response pattern (~150 lines removed)
+- Target window subscribes and handles tab insertion directly
+
+**Pattern usage:**
+- Drag-and-drop tab between windows
+- Context menu "Move to Window" (tab context menu)
+- Context menu "Open in Window" (sidebar file tree)
+
+**Event flow:**
+```
+Source Window                Target Window
+     ├──→ TRANSFER_TAB_TO_WINDOW.send()
+     ├──→ focus_window()
+     └──→ close_tab()          └──→ insert_tab() + switch_to_tab()
+```
+
+**Listener in target window:**
+```rust
+use_future(move || async move {
+    let mut rx = crate::events::TRANSFER_TAB_TO_WINDOW.subscribe();
+    let current_window_id = window().id();
+
+    while let Ok((target_window_id, target_index, tab)) = rx.recv().await {
+        if target_window_id != current_window_id {
+            continue;
         }
+
+        let tabs_len = state.tabs.read().len();
+        let insert_index = target_index.unwrap_or(tabs_len);
+        let new_tab_index = state.insert_tab(tab, insert_index);
+        state.switch_to_tab(new_tab_index);
+        window().set_focus();
     }
 });
 ```
@@ -816,51 +855,82 @@ How many files use this code?
 │
 └─ 3+ files
    └─ Create independent module
-      Example: FILE_OPEN_BROADCAST in events.rs (main_app.rs → multiple app.rs)
+      Example: TRANSFER_TAB_TO_WINDOW in events.rs (used by tab_item.rs, tab_bar.rs, app.rs)
 ```
 
-**Real example from session:**
-
-Initial (wrong):
-- `state/globals.rs` contained ALL event-related code
-- Problem: `OPEN_EVENT_RECEIVER` (2 files) mixed with `FILE_OPEN_BROADCAST` (many files)
-
-Final (correct):
-- `components/main_app.rs`: `OpenEvent` + `OPEN_EVENT_RECEIVER` (main.rs ↔ main_app.rs only)
-- `events.rs`: `FILE_OPEN_BROADCAST` + `DIRECTORY_OPEN_BROADCAST` (main_app.rs → multiple app.rs)
-
 **Insight**: Don't group by "what it is" (globals, events, state). Group by "where it's used" (2 files vs many files).
+
+### Sidebar Tree Interaction Patterns
+
+**Split click areas for intuitive directory navigation:**
+
+Following browser file-tree conventions (VS Code, Chrome DevTools):
+- **Chevron icon**: Click to expand/collapse directory
+- **Folder icon + label**: Click to set directory as sidebar root
+- **File icon + label**: Click to open file in tab
+- **Full row**: Falls back to default action (open file / set root)
+
+**Implementation pattern:**
+```rust
+// Parent row: default click handler
+div {
+    class: "sidebar-tree-node-content",
+    onclick: move |_| {
+        if is_dir {
+            state.set_root_directory(&path);
+        } else {
+            state.open_file(&path);
+        }
+    },
+
+    // Chevron: toggle expansion (stops propagation)
+    if is_dir {
+        span {
+            class: "sidebar-tree-chevron-wrapper",
+            onclick: move |e| {
+                e.stop_propagation();  // Don't trigger row click
+                state.toggle_directory_expansion(&path);
+            },
+            Icon { name: if is_expanded { ChevronDown } else { ChevronRight } }
+        }
+    }
+
+    // Folder/file link (optional override, can be same as row click)
+    span {
+        class: "sidebar-tree-file-link",
+        onclick: move |e| {
+            e.stop_propagation();
+            state.open_file(&path);
+        },
+        Icon { name: File }
+        span { "{name}" }
+    }
+}
+```
+
+**Why this pattern:**
+- Full row is clickable (better UX than small click targets)
+- Chevron stops propagation to prevent accidental navigation
+- Consistent with user expectations from other file explorers
+- Allows clicking on padding/whitespace to trigger default action
+
+**CSS requirements:**
+- Fixed row height (`26px`) to prevent layout shift
+- Full row hover background for visual feedback
+- Separate hover states for chevron vs folder/file areas (optional)
 
 ### Layer-Based Architecture Validation
 
 **When designing multi-layer systems, validate each layer independently:**
 
-**Bad approach:**
-```rust
-// Single module with mixed responsibilities
-pub static OPEN_EVENT_RECEIVER: ...;       // Layer 1: OS → Dioxus
-pub static FILE_OPEN_BROADCAST: ...;        // Layer 2: MainApp → Apps
-```
-
-**Good approach - separate by layer:**
-```rust
-// Layer 1: OS → Dioxus (main_app.rs)
-pub enum OpenEvent { ... }
-pub static OPEN_EVENT_RECEIVER: Mutex<Option<Receiver<OpenEvent>>> = ...;
-
-// Layer 2: MainApp → Apps (events.rs)
-pub static FILE_OPEN_BROADCAST: LazyLock<broadcast::Sender<PathBuf>> = ...;
-```
-
 **Questions to ask:**
-1. What are the communication boundaries? (OS/Dioxus, MainApp/Apps)
-2. What crosses each boundary? (OpenEvent, PathBuf)
-3. Who are the senders/receivers? (1:1 vs 1:N)
-4. Where should the channel live? (Closer to the unique side)
+1. What are the communication boundaries? (OS/Dioxus, component/component)
+2. Who are the senders/receivers? (1:1 vs 1:N)
+3. Where should the channel live? (Closer to the unique side)
 
-**Pattern from session:**
-- Layer 1 (mpsc): OS event handler → single MainApp → use `Mutex<Option<Receiver>>`
-- Layer 2 (broadcast): MainApp → multiple Apps → use `LazyLock<broadcast::Sender>`
+**Pattern:**
+- 1:1 communication → `mpsc` or direct function calls
+- 1:N communication → `broadcast` channel
 - Don't mix layers in the same module just because they're "event-related"
 
 ---

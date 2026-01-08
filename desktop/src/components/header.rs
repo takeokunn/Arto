@@ -1,9 +1,9 @@
-use dioxus::document;
 use dioxus::prelude::*;
 
 use crate::components::icon::{Icon, IconName};
 use crate::components::theme_selector::ThemeSelector;
 use crate::state::AppState;
+use crate::utils::file_operations;
 
 #[component]
 pub fn Header() -> Element {
@@ -67,9 +67,6 @@ pub fn Header() -> Element {
         });
     };
 
-    // Check if there's a file to reload/copy
-    let can_reload = file_path.is_some();
-
     // Copy feedback state
     let mut is_copied = use_signal(|| false);
 
@@ -116,29 +113,40 @@ pub fn Header() -> Element {
                     "{file}"
                 }
 
-                // Copy path button
-                if let Some(path) = file_path {
-                    button {
-                        class: "nav-button copy-button",
-                        class: if *is_copied.read() { "copied" },
-                        title: "Copy full path",
-                        onclick: {
-                            let path_str = path.to_string_lossy().to_string();
-                            move |_| {
-                                let escaped = path_str.replace('\\', "\\\\").replace('`', "\\`");
-                                spawn(async move {
-                                    let js = format!("navigator.clipboard.writeText(`{}`)", escaped);
-                                    let _ = document::eval(&js).await;
+                div {
+                    class: "file-action-buttons",
+
+                    // Copy path button and reload button (shown on hover)
+                    if let Some(path) = file_path {
+                        button {
+                            class: "nav-button copy-button",
+                            class: if *is_copied.read() { "copied" },
+                            title: "Copy full path",
+                            onclick: {
+                                let path_str = path.to_string_lossy().to_string();
+                                move |_| {
+                                    file_operations::copy_to_clipboard(&path_str);
                                     // Show success feedback
                                     is_copied.set(true);
-                                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                                    is_copied.set(false);
-                                });
+                                    spawn(async move {
+                                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                                        is_copied.set(false);
+                                    });
+                                }
+                            },
+                            Icon {
+                                name: if *is_copied.read() { IconName::Check } else { IconName::Copy },
+                                size: 14,
                             }
-                        },
-                        Icon {
-                            name: if *is_copied.read() { IconName::Check } else { IconName::Copy },
-                            size: 16,
+                        }
+
+                        // Reload button (next to copy button)
+                        button {
+                            class: "nav-button reload-button",
+                            class: if *is_reloading.read() { "reloading" },
+                            onclick: on_reload,
+                            title: "Reload file",
+                            Icon { name: IconName::Refresh, size: 14 }
                         }
                     }
                 }
@@ -167,16 +175,6 @@ pub fn Header() -> Element {
                         }
                     },
                     Icon { name: IconName::Search, size: 20 }
-                }
-
-                // Reload button
-                button {
-                    class: "nav-button reload-button",
-                    class: if *is_reloading.read() { "reloading" },
-                    disabled: !can_reload,
-                    onclick: on_reload,
-                    title: "Reload file",
-                    Icon { name: IconName::Refresh }
                 }
 
                 // Theme selector

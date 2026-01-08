@@ -68,24 +68,174 @@
   pointer-events: none;
 }
 
-/* Parent navigation container with toggle */
-.parent-nav-container {
+.file-explorer-empty {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 0px;
-  margin: 0 0 8px -8px;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
-/* File explorer toolbar */
-.file-explorer-toolbar {
+/* ========================================
+   Sidebar Header Section
+   ======================================== */
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0px;
+  margin: 0 0 8px 0;
+}
+
+/* History navigation buttons */
+.sidebar-header-history {
   display: flex;
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
 }
 
-.file-explorer-toolbar-button {
+.sidebar-header:hover .sidebar-header-history {
+  opacity: 1;
+}
+
+.sidebar-header-history-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  transition:
+    opacity 0.2s ease,
+    background-color 0.15s ease;
+}
+
+.sidebar-header-history-button:hover:not(:disabled) {
+  background-color: var(--hover-bg);
+}
+
+.sidebar-header-history-button:disabled,
+.sidebar-header-history-button.disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Header navigation (parent directory) */
+.sidebar-header-nav {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar-header:hover .sidebar-header-nav {
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.sidebar-header-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar-header-icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.sidebar-header-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-color);
+}
+
+/* Header action buttons (copy & reload) */
+.sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar-header:hover .sidebar-header-actions {
+  opacity: 1;
+}
+
+.sidebar-action-button {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition:
+    opacity 0.2s,
+    color 0.2s,
+    background-color 0.15s ease;
+}
+
+.sidebar-action-button:hover {
+  background-color: var(--hover-bg);
+  opacity: 1;
+}
+
+/* Copy button success state */
+.sidebar-action-button.copy-button.copied {
+  opacity: 1;
+  color: var(--copy-button-success-fg);
+}
+
+/* Reload button animation */
+.sidebar-action-button.reload-button.reloading {
+  opacity: 1;
+}
+
+.sidebar-action-button.reload-button.reloading .icon {
+  animation: spin 0.6s ease-in-out;
+}
+
+/* Header toolbar */
+.sidebar-header-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.sidebar-header-toolbar-button {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -101,126 +251,123 @@
   flex-shrink: 0;
 }
 
-.file-explorer-toolbar-button:hover {
+.sidebar-header-toolbar-button:hover {
   border-color: var(--border-color);
   background: var(--bg-primary);
 }
 
-.file-explorer-toolbar-button .icon {
+.sidebar-header-toolbar-button .icon {
   color: var(--text-secondary);
   opacity: 0.7;
 }
 
-.file-explorer-toolbar-button:hover .icon {
+.sidebar-header-toolbar-button:hover .icon {
   opacity: 1;
 }
 
-/* Reload button animation */
-.file-explorer-toolbar-button.reloading .icon {
-  animation: spin 0.6s ease-in-out;
-}
+/* ========================================
+   Sidebar Tree Section
+   ======================================== */
 
-.file-explorer-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-/* Directory tree */
-.directory-tree {
+.sidebar-tree {
   display: flex;
   flex-direction: column;
   overflow: hidden auto;
 }
 
 /* Webkit (Chrome, Safari, Edge) */
-.directory-tree::-webkit-scrollbar {
+.sidebar-tree::-webkit-scrollbar {
   width: 2px;
   height: 2px;
 }
 
-/* File tree node */
-.file-tree-node {
+/* Tree node */
+.sidebar-tree-node {
   position: relative;
 }
 
-.file-tree-node-content {
+.sidebar-tree-node-content {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
+  height: 26px;
+  box-sizing: border-box;
   cursor: pointer;
   border-radius: 4px;
-  transition: background-color 0.15s ease;
   white-space: nowrap;
   overflow: hidden;
   opacity: 0.5;
+  transition:
+    background-color 0.15s ease,
+    opacity 0.2s ease;
 }
 
-.file-tree-node-content:hover {
+.sidebar-tree-node-content:hover {
   background-color: var(--hover-bg);
   opacity: 1;
 }
 
-.file-tree-node.active > .file-tree-node-content {
+.sidebar-tree-node.active > .sidebar-tree-node-content {
   opacity: 0.8;
 }
 
-/* Parent navigation */
-.file-tree-node.parent-nav {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Root indicator - non-clickable */
-.file-tree-node.root-indicator > .file-tree-node-content {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.file-tree-node.root-indicator > .file-tree-node-content:hover {
-  background-color: transparent;
-  opacity: 0.6;
-}
-
-/* File tree icons */
-.file-tree-icon {
+/* Tree icons */
+.sidebar-tree-icon {
   flex-shrink: 0;
   color: var(--text-secondary);
 }
 
-.file-tree-chevron {
+.sidebar-tree-chevron {
   flex-shrink: 0;
   color: var(--text-secondary);
   transition: transform 0.2s ease;
 }
 
+/* Chevron wrapper - clickable area for expand/collapse */
+.sidebar-tree-chevron-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Directory/File link - clickable area for folder icon + label */
+.sidebar-tree-dir-link,
+.sidebar-tree-file-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 /* Spacer for alignment */
-.file-tree-spacer {
+.sidebar-tree-spacer {
   width: 16px;
   flex-shrink: 0;
 }
 
-/* File tree label */
-.file-tree-label {
+/* Tree label */
+.sidebar-tree-label {
   flex: 1;
   font-size: 0.9rem;
+  line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-color);
 }
 
-.file-tree-label.disabled {
+.sidebar-tree-label.disabled {
   color: var(--text-secondary);
   opacity: 0.6;
 }
 
-/* Action buttons - only visible on hover */
-.file-tree-copy-button,
-.file-tree-enter-button {
+/* Tree action buttons - only visible on hover */
+.sidebar-tree-copy-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -231,39 +378,32 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 2px 4px;
+  margin-left: auto;
   opacity: 0;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
   flex-shrink: 0;
 }
 
-/* Push action buttons to the right - enter button takes precedence if present */
-.file-tree-node-content > .file-tree-enter-button,
-.file-tree-node-content > .file-tree-copy-button:first-of-type:last-of-type {
-  margin-left: auto;
-}
-
-.file-tree-enter-label {
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
-.file-tree-node-content:hover .file-tree-copy-button,
-.file-tree-node-content:hover .file-tree-enter-button {
+.sidebar-tree-node-content:hover .sidebar-tree-copy-button {
   opacity: 0.6;
 }
 
-.file-tree-copy-button:hover,
-.file-tree-enter-button:hover {
+.sidebar-tree-copy-button:hover {
   opacity: 1 !important;
   background-color: var(--hover-bg);
 }
 
-.file-tree-copy-button.copied {
+.sidebar-tree-copy-button.copied {
   opacity: 1 !important;
   color: var(--copy-button-success-fg);
 }
 
-/* Main area adjustment */
+/* ========================================
+   Main Area
+   ======================================== */
+
 .main-area {
   flex: 1;
   display: flex;

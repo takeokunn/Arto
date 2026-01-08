@@ -16,7 +16,6 @@ enum MenuId {
     NewTab,
     Open,
     OpenDirectory,
-    OpenInExternalEditor,
     RevealInFinder,
     CopyFilePath,
     CloseTab,
@@ -44,7 +43,6 @@ impl MenuId {
             "file.new_tab" => Some(Self::NewTab),
             "file.open" => Some(Self::Open),
             "file.open_directory" => Some(Self::OpenDirectory),
-            "file.open_in_external_editor" => Some(Self::OpenInExternalEditor),
             "file.reveal_in_finder" => Some(Self::RevealInFinder),
             "file.copy_file_path" => Some(Self::CopyFilePath),
             "file.close_tab" => Some(Self::CloseTab),
@@ -73,7 +71,6 @@ impl MenuId {
             Self::NewTab => "file.new_tab",
             Self::Open => "file.open",
             Self::OpenDirectory => "file.open_directory",
-            Self::OpenInExternalEditor => "file.open_in_external_editor",
             Self::RevealInFinder => "file.reveal_in_finder",
             Self::CopyFilePath => "file.copy_file_path",
             Self::CloseTab => "file.close_tab",
@@ -159,19 +156,13 @@ fn add_file_menu(menu: &Menu) {
                 Some(Modifiers::SHIFT),
             ),
             &PredefinedMenuItem::separator(),
-            &create_menu_item(
-                MenuId::OpenInExternalEditor,
-                "Open in External Editor",
-                Some(Code::KeyE),
-                Some(Modifiers::SHIFT),
-            ),
+            &create_menu_item(MenuId::CopyFilePath, "Copy File Path", None, None),
             &create_menu_item(
                 MenuId::RevealInFinder,
                 "Reveal in Finder",
                 Some(Code::KeyR),
                 Some(Modifiers::SHIFT),
             ),
-            &create_menu_item(MenuId::CopyFilePath, "Copy File Path", None, None),
             &PredefinedMenuItem::separator(),
             &create_menu_item(MenuId::CloseTab, "Close Tab", Some(Code::KeyW), None),
             &create_menu_item(MenuId::CloseAllTabs, "Close All Tabs", None, None),
@@ -419,11 +410,6 @@ pub fn handle_menu_event_with_state(event: &MenuEvent, state: &mut AppState) -> 
                     tab.content = crate::state::TabContent::File(path.to_owned());
                 }
             });
-        }
-        MenuId::OpenInExternalEditor => {
-            if let Some(file) = get_current_file(state) {
-                crate::utils::file_operations::open_in_external_editor(&file);
-            }
         }
         MenuId::RevealInFinder => {
             if let Some(file) = get_current_file(state) {

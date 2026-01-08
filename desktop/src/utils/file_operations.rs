@@ -2,14 +2,6 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-/// Open a file in the system's default external editor
-pub fn open_in_external_editor(path: impl AsRef<Path>) {
-    let path = path.as_ref();
-    if let Err(e) = open::that(path) {
-        tracing::error!(%e, ?path, "Failed to open in external editor");
-    }
-}
-
 /// Reveal a file in Finder (macOS) or file explorer
 pub fn reveal_in_finder(path: impl AsRef<Path>) {
     let path = path.as_ref();

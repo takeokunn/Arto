@@ -19,7 +19,7 @@ use super::toc_panel::TocPanel;
 use crate::assets::MAIN_SCRIPT;
 use crate::drag;
 use crate::events::{
-    ActiveDragUpdate, ACTIVE_DRAG_UPDATE, DIRECTORY_OPEN_BROADCAST, FILE_OPEN_BROADCAST,
+    ActiveDragUpdate, ACTIVE_DRAG_UPDATE, OPEN_DIRECTORY_IN_WINDOW, OPEN_FILE_IN_WINDOW,
 };
 use crate::menu;
 use crate::state::{AppState, PersistedState, Tab, LAST_FOCUSED_STATE};
@@ -73,22 +73,20 @@ pub fn App(
         // Initialize with provided tab (preserves history)
         app_state.tabs.write()[0] = tab;
 
-        // Apply initial directory from params (resolved in create_new_main_window)
-        *app_state.directory.write() = Some(directory.clone());
-        // Update last focused state for "Last Focused" behavior
-        LAST_FOCUSED_STATE.write().directory = Some(directory);
-
         // Set initial theme
         LAST_FOCUSED_STATE.write().theme = theme;
 
-        // Apply initial sidebar settings from params
+        // Apply initial sidebar settings from params (including directory)
         {
             let mut sidebar = app_state.sidebar.write();
+            sidebar.root_directory = Some(directory.clone());
+            sidebar.push_to_history(directory.clone());
             sidebar.open = sidebar_open;
             sidebar.width = sidebar_width;
             sidebar.show_all_files = sidebar_show_all_files;
             // Update last focused state for "Last Focused" behavior
             let mut state = LAST_FOCUSED_STATE.write();
+            state.directory = Some(directory);
             state.sidebar_open = sidebar_open;
             state.sidebar_width = sidebar_width;
             state.sidebar_show_all_files = sidebar_show_all_files;
@@ -210,11 +208,8 @@ pub fn App(
         _ => {}
     });
 
-    // Listen for file open broadcasts from background process
-    setup_file_open_listener(state);
-
-    // Listen for directory open broadcasts from background process
-    setup_directory_open_listener(state);
+    // Listen for cross-window file/directory open events (from sidebar context menu)
+    setup_cross_window_open_listeners(state);
 
     // Update window title when active tab changes
     use_effect(move || {
@@ -227,60 +222,29 @@ pub fn App(
         }
     });
 
-    // Listen for tab transfer requests (target-side handler for context menu)
+    // Listen for tab transfer events (from drag-and-drop and context menu "Move to Window")
     use_future(move || async move {
-        let mut rx = crate::events::TAB_TRANSFER_REQUEST.subscribe();
+        let mut rx = crate::events::TRANSFER_TAB_TO_WINDOW.subscribe();
         let current_window_id = window().id();
 
-        while let Ok(request) = rx.recv().await {
-            // Only process requests targeted to this window
-            if request.target_window_id != current_window_id {
+        while let Ok((target_window_id, target_index, tab)) = rx.recv().await {
+            // Only process transfers targeted to this window
+            if target_window_id != current_window_id {
                 continue;
             }
 
-            tracing::debug!(?request, "Received tab transfer request");
+            tracing::debug!(?target_window_id, ?target_index, "Received tab transfer");
 
-            // Phase 1: Prepare - validate request
-            let can_accept = {
-                // Check if window still exists and is visible
-                // Could add more checks here:
-                // - Max tab limit
-                // - Duplicate tab check
-                // - etc.
+            // Insert the tab at the specified position
+            let tabs_len = state.tabs.read().len();
+            let insert_index = target_index.unwrap_or(tabs_len);
+            let new_tab_index = state.insert_tab(tab, insert_index);
+            state.switch_to_tab(new_tab_index);
 
-                window().is_visible()
-            };
+            // Focus this window after receiving the tab
+            window().set_focus();
 
-            if can_accept {
-                // Phase 2a: Commit - insert tab and send Ack
-                let tabs_len = state.tabs.read().len();
-                let insert_index = request.target_index.unwrap_or(tabs_len);
-                let new_tab_index = state.insert_tab(request.tab.clone(), insert_index);
-                state.switch_to_tab(new_tab_index);
-
-                // Focus this window after receiving the tab
-                window().set_focus();
-
-                crate::events::TAB_TRANSFER_RESPONSE
-                    .send(crate::events::TabTransferResponse::Ack {
-                        request_id: request.request_id,
-                        source_window_id: request.source_window_id,
-                    })
-                    .ok();
-
-                tracing::info!("Tab transfer accepted and committed");
-            } else {
-                // Phase 2b: Rollback - send Nack
-                crate::events::TAB_TRANSFER_RESPONSE
-                    .send(crate::events::TabTransferResponse::Nack {
-                        request_id: request.request_id,
-                        source_window_id: request.source_window_id,
-                        reason: "Window is not ready to accept tabs".to_string(),
-                    })
-                    .ok();
-
-                tracing::warn!("Tab transfer rejected");
-            }
+            tracing::info!("Tab transfer completed");
         }
     });
 
@@ -463,32 +427,33 @@ fn sync_window_metrics(
     }
 }
 
-/// Setup listener for file open broadcasts from the background process
-fn setup_file_open_listener(mut state: AppState) {
-    use_future(move || async move {
-        let mut rx = FILE_OPEN_BROADCAST.subscribe();
+/// Setup listeners for cross-window file/directory open events (from sidebar context menu)
+fn setup_cross_window_open_listeners(mut state: AppState) {
+    let current_window_id = window().id();
 
-        while let Ok(file) = rx.recv().await {
-            // Only handle in the focused window
-            if window().is_focused() {
-                tracing::info!("Opening file from broadcast: {:?}", file);
-                state.open_file(file);
+    // Listen for "Open in Window" file events
+    use_future(move || async move {
+        let mut rx = OPEN_FILE_IN_WINDOW.subscribe();
+
+        while let Ok((target_window_id, path)) = rx.recv().await {
+            // Only handle if this window is the target
+            if target_window_id == current_window_id {
+                tracing::info!(?path, "Opening file from cross-window request");
+                state.open_file(path);
             }
         }
     });
-}
 
-/// Setup listener for directory open broadcasts from the background process
-fn setup_directory_open_listener(mut state: AppState) {
+    // Listen for "Open in Window" directory events
     use_future(move || async move {
-        let mut rx = DIRECTORY_OPEN_BROADCAST.subscribe();
+        let mut rx = OPEN_DIRECTORY_IN_WINDOW.subscribe();
 
-        while let Ok(dir) = rx.recv().await {
-            // Only handle in the focused window
-            if window().is_focused() {
-                tracing::info!("Opening directory from broadcast: {:?}", dir);
-                state.set_root_directory(dir.clone());
-                // Optionally show the sidebar if it's hidden
+        while let Ok((target_window_id, path)) = rx.recv().await {
+            // Only handle if this window is the target
+            if target_window_id == current_window_id {
+                tracing::info!(?path, "Opening directory from cross-window request");
+                state.set_root_directory(path.clone());
+                // Show the sidebar if it's hidden
                 if !state.sidebar.read().open {
                     state.toggle_sidebar();
                 }
@@ -672,14 +637,11 @@ fn handle_drop_in_tab_bar(
     active: &drag::GlobalActiveDrag,
     is_single_tab: bool,
 ) {
-    use crate::events::{TabTransferRequest, TAB_TRANSFER_REQUEST};
-
     let (Some(target_wid), Some(dragged)) = (active.target_window_id, drag::get_dragged_tab())
     else {
         return;
     };
 
-    let source_wid = dragged.source_window_id;
     let current_wid = window().id();
 
     if target_wid == current_wid {
@@ -695,15 +657,9 @@ fn handle_drop_in_tab_bar(
         }
     } else {
         // Drop in another window - send transfer request
-        let request = TabTransferRequest {
-            source_window_id: source_wid,
-            target_window_id: target_wid,
-            tab: dragged.tab,
-            target_index: Some(active.target_index),
-            source_directory: state.directory.read().clone(),
-            request_id: uuid::Uuid::new_v4(),
-        };
-        TAB_TRANSFER_REQUEST.send(request).ok();
+        crate::events::TRANSFER_TAB_TO_WINDOW
+            .send((target_wid, Some(active.target_index), dragged.tab))
+            .ok();
         crate::window::main::focus_window(target_wid);
 
         if is_single_tab {
@@ -852,7 +808,7 @@ fn compute_detach_transition(
                     tab: dragged.tab.clone(),
                     position: preview_position,
                     is_single_tab: active.source_tab_count == 1,
-                    directory: state.directory.read().clone(),
+                    directory: state.sidebar.read().root_directory.clone(),
                     sidebar: state.sidebar.read().clone(),
                     theme: *state.current_theme.read(),
                     size: win.inner_size().to_logical::<u32>(win.scale_factor()),

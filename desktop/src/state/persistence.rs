@@ -80,7 +80,7 @@ impl From<&AppState> for PersistedState {
     fn from(state: &AppState) -> Self {
         let sidebar = state.sidebar.read();
         Self {
-            directory: state.directory.read().clone(),
+            directory: state.sidebar.read().root_directory.clone(),
             theme: *state.current_theme.read(),
             sidebar_open: sidebar.open,
             sidebar_width: sidebar.width,

@@ -5,22 +5,41 @@ use dioxus::prelude::*;
 
 use crate::components::icon::{Icon, IconName};
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum SidebarItemKind {
+    File,
+    Directory,
+}
+
 #[component]
-pub fn TabContextMenu(
+pub fn SidebarContextMenu(
     position: (i32, i32),
-    file_path: Option<PathBuf>,
+    path: PathBuf,
+    kind: SidebarItemKind,
     on_close: EventHandler<()>,
-    on_copy_path: EventHandler<()>,
-    on_reload: EventHandler<()>,
-    on_set_parent_as_root: EventHandler<()>,
+    on_open: EventHandler<()>,
     on_open_in_new_window: EventHandler<()>,
     on_move_to_window: EventHandler<WindowId>,
+    on_copy_path: EventHandler<()>,
     on_reveal_in_finder: EventHandler<()>,
+    on_reload: EventHandler<()>,
     other_windows: Vec<(WindowId, String)>,
-    #[props(default = false)] disabled: bool,
 ) -> Element {
     let mut show_submenu = use_signal(|| false);
-    let has_file = file_path.is_some();
+
+    let is_file = kind == SidebarItemKind::File;
+
+    // Dynamic labels based on item kind
+    let open_label = if is_file {
+        "Open File"
+    } else {
+        "Open Directory"
+    };
+    let copy_path_label = if is_file {
+        "Copy File Path"
+    } else {
+        "Copy Directory Path"
+    };
 
     rsx! {
         // Backdrop to close menu on outside click
@@ -35,24 +54,25 @@ pub fn TabContextMenu(
             style: "left: {position.0}px; top: {position.1}px;",
             onclick: move |evt| evt.stop_propagation(),
 
-            // === Section 1: Window operations ===
+            // === Section 1: Open operations ===
+            ContextMenuItem {
+                label: open_label,
+                icon: Some(if is_file { IconName::File } else { IconName::FolderOpen }),
+                on_click: move |_| on_open.call(()),
+            }
+
             ContextMenuItem {
                 label: "Open in New Window",
-                disabled: disabled,
                 on_click: move |_| on_open_in_new_window.call(()),
             }
 
-            // Move to Window (with submenu)
+            // Open in Window (with submenu)
             div {
-                class: if disabled { "context-menu-item disabled" } else { "context-menu-item has-submenu" },
-                onmouseenter: move |_| {
-                    if !disabled {
-                        show_submenu.set(true);
-                    }
-                },
+                class: "context-menu-item has-submenu",
+                onmouseenter: move |_| show_submenu.set(true),
                 onmouseleave: move |_| show_submenu.set(false),
 
-                span { class: "context-menu-label", "Move to Window" }
+                span { class: "context-menu-label", "Open in Window" }
                 span { class: "submenu-arrow", "›" }
 
                 if *show_submenu.read() {
@@ -88,33 +108,23 @@ pub fn TabContextMenu(
             ContextMenuSeparator {}
 
             ContextMenuItem {
-                label: "Copy File Path",
+                label: copy_path_label,
                 icon: Some(IconName::Copy),
-                disabled: !has_file,
                 on_click: move |_| on_copy_path.call(()),
             }
 
             ContextMenuItem {
                 label: "Reveal in Finder",
                 icon: Some(IconName::Folder),
-                disabled: !has_file,
                 on_click: move |_| on_reveal_in_finder.call(()),
             }
 
-            // === Section 3: Tab operations ===
+            // === Section 3: Reload ===
             ContextMenuSeparator {}
-
-            ContextMenuItem {
-                label: "Set Parent as Root",
-                icon: Some(IconName::FolderOpen),
-                disabled: !has_file,
-                on_click: move |_| on_set_parent_as_root.call(()),
-            }
 
             ContextMenuItem {
                 label: "Reload",
                 icon: Some(IconName::Refresh),
-                disabled: !has_file,
                 on_click: move |_| on_reload.call(()),
             }
         }

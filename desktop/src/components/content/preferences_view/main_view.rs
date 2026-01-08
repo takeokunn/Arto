@@ -221,7 +221,7 @@ pub fn PreferencesView() -> Element {
                             DirectoryTab {
                                 config,
                                 has_changes,
-                                current_directory: state.directory.read().clone(),
+                                current_directory: state.sidebar.read().root_directory.clone(),
                             }
                         },
                         PreferencesTab::About => rsx! {

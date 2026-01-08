@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use dioxus::desktop::{tao::window::WindowId, window};
 use dioxus::prelude::*;
 
@@ -8,10 +6,8 @@ use super::context_menu::TabContextMenu;
 use super::tab_bar::PendingDrag;
 use crate::components::icon::{Icon, IconName};
 use crate::drag;
-use crate::events::{
-    TabTransferRequest, TabTransferResponse, TAB_TRANSFER_REQUEST, TAB_TRANSFER_RESPONSE,
-};
 use crate::state::AppState;
+use crate::utils::file_operations;
 
 #[component]
 pub fn TabItem(
@@ -24,6 +20,7 @@ pub fn TabItem(
     let mut state = use_context::<AppState>();
     let tab_name = tab.display_name();
     let transferable = is_tab_transferable(&tab.content);
+    let file_path = tab.file().map(|p| p.to_path_buf());
 
     let mut show_context_menu = use_signal(|| false);
     let mut context_menu_position = use_signal(|| (0, 0));
@@ -102,7 +99,7 @@ pub fn TabItem(
     // Create new window first, then close tab (in case it's the last tab)
     let handle_open_in_new_window = move |_| {
         if let Some(tab) = state.get_tab(index) {
-            let directory = state.directory.read().clone();
+            let directory = state.sidebar.read().root_directory.clone();
 
             spawn(async move {
                 let params = crate::window::main::CreateMainWindowConfigParams {
@@ -118,73 +115,68 @@ pub fn TabItem(
         show_context_menu.set(false);
     };
 
-    // Handler for "Move to Window" (Two-Phase Commit)
+    // Handler for "Copy File Path"
+    let handle_copy_path = {
+        let file_path = file_path.clone();
+        move |_| {
+            if let Some(ref path) = file_path {
+                file_operations::copy_to_clipboard(&path.to_string_lossy());
+            }
+            show_context_menu.set(false);
+        }
+    };
+
+    // Handler for "Reload"
+    let handle_reload = move |_| {
+        state.reload_current_tab();
+        show_context_menu.set(false);
+    };
+
+    // Handler for "Set Parent as Root"
+    let handle_set_parent_as_root = {
+        let file_path = file_path.clone();
+        move |_| {
+            if let Some(ref path) = file_path {
+                if let Some(parent) = path.parent() {
+                    state.set_root_directory(parent.to_path_buf());
+                }
+            }
+            show_context_menu.set(false);
+        }
+    };
+
+    // Handler for "Reveal in Finder"
+    let handle_reveal_in_finder = {
+        let file_path = file_path.clone();
+        move |_| {
+            if let Some(ref path) = file_path {
+                file_operations::reveal_in_finder(path);
+            }
+            show_context_menu.set(false);
+        }
+    };
+
+    // Handler for "Move to Window"
+    // Uses TRANSFER_TAB_TO_WINDOW to preserve tab history when moving between windows
     let handle_move_to_window = move |target_id: WindowId| {
-        use uuid::Uuid;
-
-        // Phase 1: Prepare - get tab copy (don't close yet)
         if let Some(tab) = state.get_tab(index) {
-            let current_directory = state.directory.read().clone();
-
-            let request = TabTransferRequest {
-                source_window_id: window().id(),
-                target_window_id: target_id,
-                tab: tab.clone(),
-                target_index: None, // Context menu always appends at end
-                source_directory: current_directory,
-                request_id: Uuid::new_v4(),
-            };
-
-            // Wait for response (spawned task)
-            let request_id = request.request_id;
-
-            spawn(async move {
-                // Subscribe BEFORE sending request to avoid race condition
-                let mut rx = TAB_TRANSFER_RESPONSE.subscribe();
-
-                // Send prepare request AFTER subscribing
-                if TAB_TRANSFER_REQUEST.send(request.clone()).is_err() {
-                    tracing::error!("Failed to send tab transfer request");
-                    return;
-                }
-
-                tracing::debug!(?request_id, tab_index = index, "Sent tab transfer request");
-
-                let timeout = tokio::time::sleep(Duration::from_secs(3));
-                tokio::pin!(timeout);
-
-                loop {
-                    tokio::select! {
-                        // Timeout - rollback
-                        _ = &mut timeout => {
-                            tracing::warn!(?request_id, "Tab transfer timeout, rolling back");
-                            break;
-                        }
-                        // Receive response
-                        Ok(response) = rx.recv() => {
-                            tracing::debug!(?response, ?request_id, "Received tab transfer response");
-                            match response {
-                                TabTransferResponse::Ack { request_id: id, .. } if id == request_id => {
-                                    // Phase 2: Commit - close tab (remove from source)
-                                    tracing::info!(?request_id, tab_index = index, "Closing tab in source window");
-                                    state.close_tab(index);
-                                    tracing::info!(?request_id, "Tab transferred successfully");
-                                    break;
-                                }
-                                TabTransferResponse::Nack { request_id: id, reason, .. } if id == request_id => {
-                                    // Phase 2: Rollback (tab remains in source)
-                                    tracing::warn!(?request_id, %reason, "Tab transfer rejected");
-                                    break;
-                                }
-                                _ => {
-                                    tracing::debug!(?response, ?request_id, "Ignoring unrelated response");
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+            // Send tab transfer request to target window (preserves history)
+            if crate::events::TRANSFER_TAB_TO_WINDOW
+                .send((target_id, None, tab.clone()))
+                .is_err()
+            {
+                tracing::warn!(
+                    ?target_id,
+                    "Failed to move tab: target window may be closed"
+                );
+                show_context_menu.set(false);
+                return;
+            }
+            // Close tab in source window
+            state.close_tab(index);
+            // Focus the target window
+            crate::window::main::focus_window(target_id);
+            tracing::info!(?target_id, "Moved tab to window");
         }
         show_context_menu.set(false);
     };
@@ -227,9 +219,14 @@ pub fn TabItem(
         if *show_context_menu.read() {
             TabContextMenu {
                 position: *context_menu_position.read(),
+                file_path: file_path.clone(),
                 on_close: move |_| show_context_menu.set(false),
+                on_copy_path: handle_copy_path,
+                on_reload: handle_reload,
+                on_set_parent_as_root: handle_set_parent_as_root,
                 on_open_in_new_window: handle_open_in_new_window,
                 on_move_to_window: handle_move_to_window,
+                on_reveal_in_finder: handle_reveal_in_finder,
                 other_windows: other_windows.read().clone(),
                 disabled: !transferable,
             }

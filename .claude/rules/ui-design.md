@@ -197,3 +197,99 @@ When content should fit without scrolling:
    ```
 
 **Note:** Replace predefined menu items (`PredefinedMenuItem::about`) with custom ones to control navigation.
+
+## Context Menu Patterns
+
+**Unified context menu behavior across components:**
+
+Arto implements context menus in three areas:
+1. **Tab context menu** - Right-click on tab items
+2. **Sidebar tree context menu** - Right-click on files/directories
+3. **Content context menu** - Right-click in markdown viewer (future)
+
+### Common Patterns
+
+**1. Window targeting with submenus:**
+```rust
+// Refresh window list on menu open
+let handle_context_menu = move |evt: Event<MouseData>| {
+    let windows = crate::window::main::list_visible_main_windows();
+    let current_id = window().id();
+    other_windows.set(
+        windows
+            .iter()
+            .filter(|w| w.window.id() != current_id)
+            .map(|w| (w.window.id(), w.window.title()))
+            .collect(),
+    );
+    show_context_menu.set(true);
+};
+
+// Handler uses fire-and-forget transfer + auto-focus
+let handle_move_to_window = move |target_id: WindowId| {
+    crate::events::TRANSFER_TAB_TO_WINDOW.send((target_id, None, tab));
+    crate::window::main::focus_window(target_id);
+    show_context_menu.set(false);
+};
+```
+
+**2. Submenu hover behavior:**
+```rust
+// Track submenu state to show/hide "Open in Window" options
+let mut show_submenu = use_signal(|| false);
+
+div {
+    class: "context-menu-item has-submenu",
+    onmouseenter: move |_| show_submenu.set(true),
+    onmouseleave: move |_| show_submenu.set(false),
+
+    span { "Open in Window" }
+    span { class: "submenu-arrow", "›" }
+
+    if *show_submenu.read() {
+        div {
+            class: "context-submenu",
+            // Window list...
+        }
+    }
+}
+```
+
+**3. Backdrop for outside-click closing:**
+```rust
+// Invisible backdrop catches clicks outside menu
+div {
+    class: "context-menu-backdrop",
+    onclick: move |_| on_close.call(()),
+}
+```
+
+### Event Propagation
+
+**Stop propagation to prevent conflicts:**
+- Context menu clicks should `evt.stop_propagation()` to prevent parent handlers
+- Sidebar tree clicks use split areas with `stop_propagation()` on chevron
+- Tab context menu should not interfere with drag events
+
+### Menu Positioning
+
+**Prevent overflow at viewport edges:**
+```css
+.context-menu {
+  position: fixed;
+  left: var(--menu-x);
+  top: var(--menu-y);
+  max-width: calc(100vw - 20px);
+  max-height: calc(100vh - 20px);
+  z-index: 1000;
+}
+
+.context-submenu {
+  position: absolute;
+  left: 100%; /* Right of parent */
+  top: 0;
+}
+```
+
+**Auto-focus target window after operations:**
+All "Open in Window" / "Move to Window" operations should call `crate::window::main::focus_window(target_id)` after sending the event, providing immediate visual feedback to the user.

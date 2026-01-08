@@ -39,7 +39,6 @@ pub struct AppState {
     pub active_tab: Signal<usize>,
     pub current_theme: Signal<Theme>,
     pub zoom_level: Signal<f64>,
-    pub directory: Signal<Option<PathBuf>>,
     pub sidebar: Signal<Sidebar>,
     pub toc_open: Signal<bool>,
     pub toc_width: Signal<f64>,
@@ -62,7 +61,6 @@ impl Default for AppState {
             active_tab: Signal::new(0),
             current_theme: Signal::new(persisted.theme),
             zoom_level: Signal::new(1.0),
-            directory: Signal::new(None),
             sidebar: Signal::new(Sidebar::default()),
             toc_open: Signal::new(persisted.toc_open),
             toc_width: Signal::new(persisted.toc_width),
@@ -79,13 +77,53 @@ impl Default for AppState {
 }
 
 impl AppState {
-    /// Set the root directory
+    /// Set the root directory and add to history
     /// Note: The directory is persisted to state file when window closes
     pub fn set_root_directory(&mut self, path: impl Into<PathBuf>) {
         let path = path.into();
-        *self.directory.write() = Some(path.clone());
-        self.sidebar.write().expanded_dirs.clear();
+        let mut sidebar = self.sidebar.write();
+        sidebar.root_directory = Some(path.clone());
+        sidebar.expanded_dirs.clear();
+        sidebar.push_to_history(path.clone());
         LAST_FOCUSED_STATE.write().directory = Some(path);
+    }
+
+    /// Set the root directory without adding to history (used for history navigation)
+    fn set_root_directory_no_history(&mut self, path: PathBuf) {
+        let mut sidebar = self.sidebar.write();
+        sidebar.root_directory = Some(path.clone());
+        sidebar.expanded_dirs.clear();
+        LAST_FOCUSED_STATE.write().directory = Some(path);
+    }
+
+    /// Go back in directory history
+    pub fn go_back_directory(&mut self) {
+        let path = self.sidebar.write().go_back();
+        if let Some(path) = path {
+            self.set_root_directory_no_history(path);
+        }
+    }
+
+    /// Go forward in directory history
+    pub fn go_forward_directory(&mut self) {
+        let path = self.sidebar.write().go_forward();
+        if let Some(path) = path {
+            self.set_root_directory_no_history(path);
+        }
+    }
+
+    /// Navigate to parent directory
+    pub fn go_to_parent_directory(&mut self) {
+        let parent = {
+            let sidebar = self.sidebar.read();
+            sidebar
+                .root_directory
+                .as_ref()
+                .and_then(|d| d.parent().map(|p| p.to_path_buf()))
+        };
+        if let Some(parent) = parent {
+            self.set_root_directory(parent);
+        }
     }
 
     /// Toggle TOC panel visibility

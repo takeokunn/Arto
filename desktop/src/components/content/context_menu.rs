@@ -50,6 +50,8 @@ pub struct ContentContextMenuProps {
 
 #[component]
 pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
+    let has_context_specific = !matches!(props.context, ContentContext::General);
+
     rsx! {
         // Backdrop to close menu on outside click
         div {
@@ -67,7 +69,7 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
             onmousedown: move |evt| evt.prevent_default(),
             onclick: move |evt| evt.stop_propagation(),
 
-            // Basic operations
+            // === Section 1: Basic text operations ===
             if props.has_selection {
                 ContextMenuItem {
                     label: "Copy",
@@ -110,6 +112,7 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                 },
             }
 
+            // === Section 2: Find and file path operations ===
             ContextMenuSeparator {}
 
             ContextMenuItem {
@@ -133,58 +136,13 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                 },
             }
 
-            // File operations (when viewing a file)
-            if let Some(ref file) = props.current_file {
+            // === Section 3: Context-specific items ===
+            if has_context_specific {
                 ContextMenuSeparator {}
-
-                ContextMenuItem {
-                    label: "Open in External Editor",
-                    shortcut: Some("⇧⌘E"),
-                    icon: Some(IconName::ExternalLink),
-                    on_click: {
-                        let file = file.clone();
-                        let on_close = props.on_close;
-                        move |_| {
-                            crate::utils::file_operations::open_in_external_editor(&file);
-                            on_close.call(());
-                        }
-                    },
-                }
-
-                ContextMenuItem {
-                    label: "Reveal in Finder",
-                    shortcut: Some("⇧⌘R"),
-                    icon: Some(IconName::Folder),
-                    on_click: {
-                        let file = file.clone();
-                        let on_close = props.on_close;
-                        move |_| {
-                            crate::utils::file_operations::reveal_in_finder(&file);
-                            on_close.call(());
-                        }
-                    },
-                }
-
-                ContextMenuItem {
-                    label: "Copy File Path",
-                    icon: Some(IconName::Copy),
-                    on_click: {
-                        let file = file.clone();
-                        let on_close = props.on_close;
-                        move |_| {
-                            crate::utils::file_operations::copy_to_clipboard(
-                                &file.to_string_lossy(),
-                            );
-                            on_close.call(());
-                        }
-                    },
-                }
             }
 
-            // Context-specific items
             match &props.context {
                 ContentContext::Link { href } => rsx! {
-                    ContextMenuSeparator {}
                     LinkContextItems {
                         href: href.clone(),
                         base_dir: props.base_dir.clone(),
@@ -192,21 +150,18 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                     }
                 },
                 ContentContext::Image { src, .. } => rsx! {
-                    ContextMenuSeparator {}
                     ImageContextItems {
                         src: src.clone(),
                         on_close: props.on_close,
                     }
                 },
                 ContentContext::CodeBlock { content, .. } => rsx! {
-                    ContextMenuSeparator {}
                     CodeBlockContextItems {
                         content: content.clone(),
                         on_close: props.on_close,
                     }
                 },
                 ContentContext::Mermaid { source } => rsx! {
-                    ContextMenuSeparator {}
                     MermaidContextItems {
                         source: source.clone(),
                         on_close: props.on_close,

@@ -237,4 +237,31 @@ impl AppState {
             self.open_preferences();
         }
     }
+
+    /// Reload the current tab.
+    /// For file tabs, this re-reads the file from disk.
+    /// For other tab types, this forces a re-render.
+    pub fn reload_current_tab(&mut self) {
+        // Get the current file path if it's a file tab
+        let file_path = self
+            .current_tab()
+            .and_then(|tab| tab.file().map(|p| p.to_path_buf()));
+
+        if let Some(path) = file_path {
+            // Re-navigate to the same file to force reload
+            self.update_current_tab(|tab| {
+                tab.navigate_to(path);
+            });
+        } else {
+            // For non-file tabs, trigger a reactive update by touching the tabs signal
+            // This forces components watching the signal to re-render
+            let mut tabs = self.tabs.write();
+            let active_index = *self.active_tab.read();
+            if let Some(tab) = tabs.get_mut(active_index) {
+                // Touch the tab to trigger change detection
+                let content = tab.content.clone();
+                tab.content = content;
+            }
+        }
+    }
 }
