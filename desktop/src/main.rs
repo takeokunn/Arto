@@ -1,4 +1,5 @@
 mod assets;
+mod bookmarks;
 mod components;
 mod config;
 mod drag;

@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use crate::components::bookmark_button::BookmarkButton;
 use crate::components::icon::{Icon, IconName};
 use crate::components::theme_selector::ThemeSelector;
 use crate::state::AppState;
@@ -115,8 +116,11 @@ pub fn Header() -> Element {
                 div {
                     class: "file-action-buttons",
 
-                    // Copy path button and reload button (shown on hover)
+                    // Bookmark, copy path, and reload buttons (shown on hover)
                     if let Some(path) = file_path {
+                        // Bookmark button
+                        BookmarkButton { path: path.to_path_buf() }
+
                         button {
                             class: "nav-button copy-button",
                             class: if *is_copied.read() { "copied" },

@@ -39,6 +39,8 @@ pub enum IconName {
     SelectAll,
     Server,
     Sidebar,
+    Star,
+    StarFilled,
     Sun,
     SunMoon,
 }
@@ -80,6 +82,8 @@ impl fmt::Display for IconName {
             IconName::SelectAll => "select-all",
             IconName::Server => "server",
             IconName::Sidebar => "layout-sidebar",
+            IconName::Star => "star",
+            IconName::StarFilled => "star-filled",
             IconName::Sun => "sun",
             IconName::SunMoon => "sun-moon",
         };

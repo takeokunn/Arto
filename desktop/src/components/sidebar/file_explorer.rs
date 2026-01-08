@@ -5,6 +5,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use super::context_menu::{SidebarContextMenu, SidebarItemKind};
+use super::quick_access::QuickAccess;
+use crate::components::bookmark_button::BookmarkButton;
 use crate::components::icon::{Icon, IconName};
 use crate::state::AppState;
 use crate::utils::{file::is_markdown_file, file_operations};
@@ -64,6 +66,9 @@ pub fn FileExplorer() -> Element {
                     "No directory open"
                 }
             }
+
+            // Quick Access section (fixed at bottom)
+            QuickAccess {}
         }
     }
 }
@@ -168,9 +173,12 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
                             "{dir_name}"
                         }
 
-                        // Action buttons (copy & reload) - shown on hover
+                        // Action buttons (bookmark, copy & reload) - shown on hover
                         div {
                             class: "sidebar-header-actions",
+
+                            // Bookmark button
+                            BookmarkButton { path: current_dir.clone() }
 
                             // Copy path button
                             button {
@@ -226,9 +234,12 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
                             "/"
                         }
 
-                        // Action buttons (copy & reload) - shown on hover
+                        // Action buttons (bookmark, copy & reload) - shown on hover
                         div {
                             class: "sidebar-header-actions",
+
+                            // Bookmark button
+                            BookmarkButton { path: current_dir.clone() }
 
                             // Copy path button
                             button {
@@ -457,6 +468,15 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
         show_context_menu.set(false);
     };
 
+    // Handler for "Toggle Bookmark"
+    let handle_toggle_bookmark = {
+        let path = path.clone();
+        move |_| {
+            crate::bookmarks::toggle_bookmark(&path);
+            show_context_menu.set(false);
+        }
+    };
+
     rsx! {
         div {
             class: "sidebar-tree-node",
@@ -548,6 +568,9 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                     }
                 }
 
+                // Bookmark button
+                BookmarkButton { path: path.clone(), size: 12 }
+
                 // Copy path button
                 button {
                     class: "sidebar-tree-copy-button",
@@ -596,6 +619,7 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                 on_open: handle_open,
                 on_open_in_new_window: handle_open_in_new_window,
                 on_move_to_window: handle_open_in_window,
+                on_toggle_bookmark: handle_toggle_bookmark,
                 on_copy_path: handle_copy_path,
                 on_reveal_in_finder: handle_reveal_in_finder,
                 on_reload: handle_reload,
