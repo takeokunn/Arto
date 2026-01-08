@@ -120,7 +120,7 @@ pub fn TabItem(
         let file_path = file_path.clone();
         move |_| {
             if let Some(ref path) = file_path {
-                file_operations::copy_to_clipboard(&path.to_string_lossy());
+                crate::utils::clipboard::copy_text(path.to_string_lossy());
             }
             show_context_menu.set(false);
         }

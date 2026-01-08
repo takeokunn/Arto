@@ -418,7 +418,7 @@ pub fn handle_menu_event_with_state(event: &MenuEvent, state: &mut AppState) -> 
         }
         MenuId::CopyFilePath => {
             if let Some(file) = get_current_file(state) {
-                crate::utils::file_operations::copy_to_clipboard(&file.to_string_lossy());
+                crate::utils::clipboard::copy_text(file.to_string_lossy());
             }
         }
         MenuId::Find => {

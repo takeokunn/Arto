@@ -3,7 +3,6 @@ use dioxus::prelude::*;
 use crate::components::icon::{Icon, IconName};
 use crate::components::theme_selector::ThemeSelector;
 use crate::state::AppState;
-use crate::utils::file_operations;
 
 #[component]
 pub fn Header() -> Element {
@@ -125,7 +124,7 @@ pub fn Header() -> Element {
                             onclick: {
                                 let path_str = path.to_string_lossy().to_string();
                                 move |_| {
-                                    file_operations::copy_to_clipboard(&path_str);
+                                    crate::utils::clipboard::copy_text(&path_str);
                                     // Show success feedback
                                     is_copied.set(true);
                                     spawn(async move {
