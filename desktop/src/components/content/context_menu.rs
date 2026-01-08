@@ -79,7 +79,7 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                         let selected_text = props.selected_text.clone();
                         let on_close = props.on_close;
                         move |_| {
-                            crate::utils::file_operations::copy_to_clipboard(&selected_text);
+                            crate::utils::clipboard::copy_text(&selected_text);
                             on_close.call(());
                         }
                     },
@@ -271,7 +271,7 @@ fn LinkContextItems(href: String, base_dir: PathBuf, on_close: EventHandler<()>)
                 let href = href.clone();
                 let on_close = on_close;
                 move |_| {
-                    crate::utils::file_operations::copy_to_clipboard(&href);
+                    crate::utils::clipboard::copy_text(&href);
                     on_close.call(());
                 }
             },
@@ -289,33 +289,7 @@ fn ImageContextItems(src: String, on_close: EventHandler<()>) -> Element {
                 let src = src.clone();
                 let on_close = on_close;
                 move |_| {
-                    let src = src.clone();
-                    spawn(async move {
-                        // Use JSON encoding to safely escape the string for JavaScript
-                        let json_src = serde_json::to_string(&src).unwrap_or_default();
-                        let js = format!(
-                            r#"
-                            (async () => {{
-                                const img = new Image();
-                                img.crossOrigin = 'anonymous';
-                                img.src = {};
-                                await new Promise(r => img.onload = r);
-                                const canvas = document.createElement('canvas');
-                                canvas.width = img.naturalWidth;
-                                canvas.height = img.naturalHeight;
-                                const ctx = canvas.getContext('2d');
-                                ctx.drawImage(img, 0, 0);
-                                canvas.toBlob(async (blob) => {{
-                                    await navigator.clipboard.write([
-                                        new ClipboardItem({{ 'image/png': blob }})
-                                    ]);
-                                }}, 'image/png');
-                            }})();
-                            "#,
-                            json_src
-                        );
-                        let _ = document::eval(&js).await;
-                    });
+                    crate::utils::clipboard::copy_image_from_data_url(&src);
                     on_close.call(());
                 }
             },
@@ -360,7 +334,7 @@ fn ImageContextItems(src: String, on_close: EventHandler<()>) -> Element {
                 let on_close = on_close;
                 move |_| {
                     // For data URLs, just copy the src (or original path if available)
-                    crate::utils::file_operations::copy_to_clipboard(&src);
+                    crate::utils::clipboard::copy_text(&src);
                     on_close.call(());
                 }
             },
@@ -378,7 +352,7 @@ fn CodeBlockContextItems(content: String, on_close: EventHandler<()>) -> Element
                 let content = content.clone();
                 let on_close = on_close;
                 move |_| {
-                    crate::utils::file_operations::copy_to_clipboard(&content);
+                    crate::utils::clipboard::copy_text(&content);
                     on_close.call(());
                 }
             },
@@ -396,7 +370,7 @@ fn MermaidContextItems(source: String, on_close: EventHandler<()>) -> Element {
                 let source = source.clone();
                 let on_close = on_close;
                 move |_| {
-                    crate::utils::file_operations::copy_to_clipboard(&source);
+                    crate::utils::clipboard::copy_text(&source);
                     on_close.call(());
                 }
             },

@@ -181,7 +181,7 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
                                     let current_dir = current_dir.clone();
                                     move |evt: Event<MouseData>| {
                                         evt.stop_propagation();
-                                        file_operations::copy_to_clipboard(&current_dir.to_string_lossy());
+                                        crate::utils::clipboard::copy_text(current_dir.to_string_lossy());
                                         is_copied.set(true);
                                         spawn(async move {
                                             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -239,7 +239,7 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
                                     let current_dir = current_dir.clone();
                                     move |evt: Event<MouseData>| {
                                         evt.stop_propagation();
-                                        file_operations::copy_to_clipboard(&current_dir.to_string_lossy());
+                                        crate::utils::clipboard::copy_text(current_dir.to_string_lossy());
                                         is_copied.set(true);
                                         spawn(async move {
                                             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -437,7 +437,7 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
     let handle_copy_path = {
         let path = path.clone();
         move |_| {
-            file_operations::copy_to_clipboard(&path.to_string_lossy());
+            crate::utils::clipboard::copy_text(path.to_string_lossy());
             show_context_menu.set(false);
         }
     };
@@ -555,7 +555,7 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                     title: "Copy full path",
                     onclick: move |evt| {
                         evt.stop_propagation();
-                        file_operations::copy_to_clipboard(&path.to_string_lossy());
+                        crate::utils::clipboard::copy_text(path.to_string_lossy());
                         // Show success feedback
                         is_copied.set(true);
                         spawn(async move {
