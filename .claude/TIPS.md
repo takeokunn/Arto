@@ -534,6 +534,28 @@ tracing::debug!("Processing batch of {} items", items.len());
 
 **Use sparingly:** Only log when information would be lost otherwise.
 
+### 5. Over-Engineering Local Communication
+
+**❌ Don't:**
+- Add timeout/retry logic for local IPC (same-process communication)
+- Use request/response patterns for fire-and-forget operations
+- Implement acknowledgment systems for desktop app window communication
+
+**✅ Do:**
+```rust
+// Simple fire-and-forget for local tab transfer
+crate::events::TRANSFER_TAB_TO_WINDOW
+    .send((target_window_id, index, tab))
+    .ok();
+```
+
+**Why:** Desktop apps have different requirements than distributed systems:
+- No network latency (same process, broadcast channel)
+- No need for timeout/retry (if window exists, it will receive the event)
+- Simpler is better (removed ~150 lines of Two-Phase Commit logic)
+
+**Real example:** Tab transfer previously used `TabTransferRequest`/`TabTransferResponse` with UUID tracking and timeout handling. Simplified to single broadcast channel `TRANSFER_TAB_TO_WINDOW`, reducing complexity without losing functionality (tab history still preserved by sending full `Tab` object).
+
 ---
 
 ## Quick Reference
@@ -773,6 +795,59 @@ spawn(async move {
 });
 ```
 
+#### Tab Transfer Between Windows
+
+**Fire-and-forget pattern for tab transfers (drag-and-drop and context menu):**
+
+```rust
+// Transfer a tab with full history preservation
+crate::events::TRANSFER_TAB_TO_WINDOW
+    .send((target_window_id, target_index, tab))
+    .ok();
+
+// Auto-focus target window after transfer
+crate::window::main::focus_window(target_window_id);
+```
+
+**Why fire-and-forget:**
+- Desktop app with local IPC (no network latency)
+- No need for acknowledgment/timeout logic
+- Simpler than request/response pattern (~150 lines removed)
+- Target window subscribes and handles tab insertion directly
+
+**Pattern usage:**
+- Drag-and-drop tab between windows
+- Context menu "Move to Window" (tab context menu)
+- Context menu "Open in Window" (sidebar file tree)
+
+**Event flow:**
+```
+Source Window                Target Window
+     ├──→ TRANSFER_TAB_TO_WINDOW.send()
+     ├──→ focus_window()
+     └──→ close_tab()          └──→ insert_tab() + switch_to_tab()
+```
+
+**Listener in target window:**
+```rust
+use_future(move || async move {
+    let mut rx = crate::events::TRANSFER_TAB_TO_WINDOW.subscribe();
+    let current_window_id = window().id();
+
+    while let Ok((target_window_id, target_index, tab)) = rx.recv().await {
+        if target_window_id != current_window_id {
+            continue;
+        }
+
+        let tabs_len = state.tabs.read().len();
+        let insert_index = target_index.unwrap_or(tabs_len);
+        let new_tab_index = state.insert_tab(tab, insert_index);
+        state.switch_to_tab(new_tab_index);
+        window().set_focus();
+    }
+});
+```
+
 ### Window Initialization Anti-Pattern
 
 **Don't update LAST_FOCUSED_STATE during window creation:**
@@ -830,6 +905,65 @@ Final (correct):
 - `events.rs`: `FILE_OPEN_BROADCAST` + `DIRECTORY_OPEN_BROADCAST` (main_app.rs → multiple app.rs)
 
 **Insight**: Don't group by "what it is" (globals, events, state). Group by "where it's used" (2 files vs many files).
+
+### Sidebar Tree Interaction Patterns
+
+**Split click areas for intuitive directory navigation:**
+
+Following browser file-tree conventions (VS Code, Chrome DevTools):
+- **Chevron icon**: Click to expand/collapse directory
+- **Folder icon + label**: Click to set directory as sidebar root
+- **File icon + label**: Click to open file in tab
+- **Full row**: Falls back to default action (open file / set root)
+
+**Implementation pattern:**
+```rust
+// Parent row: default click handler
+div {
+    class: "sidebar-tree-node-content",
+    onclick: move |_| {
+        if is_dir {
+            state.set_root_directory(&path);
+        } else {
+            state.open_file(&path);
+        }
+    },
+
+    // Chevron: toggle expansion (stops propagation)
+    if is_dir {
+        span {
+            class: "sidebar-tree-chevron-wrapper",
+            onclick: move |e| {
+                e.stop_propagation();  // Don't trigger row click
+                state.toggle_directory_expansion(&path);
+            },
+            Icon { name: if is_expanded { ChevronDown } else { ChevronRight } }
+        }
+    }
+
+    // Folder/file link (optional override, can be same as row click)
+    span {
+        class: "sidebar-tree-file-link",
+        onclick: move |e| {
+            e.stop_propagation();
+            state.open_file(&path);
+        },
+        Icon { name: File }
+        span { "{name}" }
+    }
+}
+```
+
+**Why this pattern:**
+- Full row is clickable (better UX than small click targets)
+- Chevron stops propagation to prevent accidental navigation
+- Consistent with user expectations from other file explorers
+- Allows clicking on padding/whitespace to trigger default action
+
+**CSS requirements:**
+- Fixed row height (`26px`) to prevent layout shift
+- Full row hover background for visual feedback
+- Separate hover states for chevron vs folder/file areas (optional)
 
 ### Layer-Based Architecture Validation
 
