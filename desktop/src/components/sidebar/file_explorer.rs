@@ -1,5 +1,4 @@
 use dioxus::desktop::window;
-use dioxus::document;
 use dioxus::prelude::*;
 use std::cmp::Ordering;
 use std::fs;
@@ -182,12 +181,9 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
                                     let current_dir = current_dir.clone();
                                     move |evt: Event<MouseData>| {
                                         evt.stop_propagation();
-                                        let path_str = current_dir.to_string_lossy().to_string();
-                                        let escaped = path_str.replace('\\', "\\\\").replace('`', "\\`");
+                                        file_operations::copy_to_clipboard(&current_dir.to_string_lossy());
+                                        is_copied.set(true);
                                         spawn(async move {
-                                            let js = format!("navigator.clipboard.writeText(`{}`)", escaped);
-                                            let _ = document::eval(&js).await;
-                                            is_copied.set(true);
                                             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                                             is_copied.set(false);
                                         });
@@ -243,12 +239,9 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
                                     let current_dir = current_dir.clone();
                                     move |evt: Event<MouseData>| {
                                         evt.stop_propagation();
-                                        let path_str = current_dir.to_string_lossy().to_string();
-                                        let escaped = path_str.replace('\\', "\\\\").replace('`', "\\`");
+                                        file_operations::copy_to_clipboard(&current_dir.to_string_lossy());
+                                        is_copied.set(true);
                                         spawn(async move {
-                                            let js = format!("navigator.clipboard.writeText(`{}`)", escaped);
-                                            let _ = document::eval(&js).await;
-                                            is_copied.set(true);
                                             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                                             is_copied.set(false);
                                         });
@@ -419,12 +412,20 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
         let path = path.clone();
         move |target_id: dioxus::desktop::tao::window::WindowId| {
             let path = path.clone();
-            if is_dir {
+            let result = if is_dir {
                 // For directories, broadcast to change root directory
-                let _ = crate::events::OPEN_DIRECTORY_IN_WINDOW.send((target_id, path));
+                crate::events::OPEN_DIRECTORY_IN_WINDOW.send((target_id, path))
             } else {
                 // For files, broadcast to open file
-                let _ = crate::events::OPEN_FILE_IN_WINDOW.send((target_id, path));
+                crate::events::OPEN_FILE_IN_WINDOW.send((target_id, path))
+            };
+            if result.is_err() {
+                tracing::warn!(
+                    ?target_id,
+                    "Failed to open in window: target window may be closed"
+                );
+                show_context_menu.set(false);
+                return;
             }
             // Focus the target window
             crate::window::main::focus_window(target_id);
@@ -548,14 +549,10 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                     title: "Copy full path",
                     onclick: move |evt| {
                         evt.stop_propagation();
-                        let path_str = path.to_string_lossy().to_string();
-                        // Escape backticks and backslashes for JavaScript
-                        let escaped = path_str.replace('\\', "\\\\").replace('`', "\\`");
+                        file_operations::copy_to_clipboard(&path.to_string_lossy());
+                        // Show success feedback
+                        is_copied.set(true);
                         spawn(async move {
-                            let js = format!("navigator.clipboard.writeText(`{}`)", escaped);
-                            let _ = document::eval(&js).await;
-                            // Show success feedback
-                            is_copied.set(true);
                             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                             is_copied.set(false);
                         });

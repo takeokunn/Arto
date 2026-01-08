@@ -161,7 +161,17 @@ pub fn TabItem(
     let handle_move_to_window = move |target_id: WindowId| {
         if let Some(tab) = state.get_tab(index) {
             // Send tab transfer request to target window (preserves history)
-            let _ = crate::events::TRANSFER_TAB_TO_WINDOW.send((target_id, None, tab.clone()));
+            if crate::events::TRANSFER_TAB_TO_WINDOW
+                .send((target_id, None, tab.clone()))
+                .is_err()
+            {
+                tracing::warn!(
+                    ?target_id,
+                    "Failed to move tab: target window may be closed"
+                );
+                show_context_menu.set(false);
+                return;
+            }
             // Close tab in source window
             state.close_tab(index);
             // Focus the target window

@@ -13,7 +13,12 @@ pub struct Sidebar {
     pub expanded_dirs: HashSet<PathBuf>,
     pub width: f64,
     pub show_all_files: bool,
-    /// History of root directory navigation (not persisted)
+    /// History of root directory navigation.
+    ///
+    /// This history is intentionally kept in-memory only and is not persisted
+    /// across application restarts. Each new session starts with a clean
+    /// navigation history to avoid storing potentially stale directory paths
+    /// on disk and to provide a fresh navigation experience.
     dir_history: HistoryManager,
 }
 
@@ -129,5 +134,77 @@ mod tests {
 
         assert!(!sidebar.expanded_dirs.contains(&path1));
         assert!(sidebar.expanded_dirs.contains(&path2));
+    }
+
+    #[test]
+    fn test_sidebar_history_initial_state() {
+        let sidebar = Sidebar::default();
+
+        // Initially, no history to navigate
+        assert!(!sidebar.can_go_back());
+        assert!(!sidebar.can_go_forward());
+    }
+
+    #[test]
+    fn test_sidebar_history_push_and_back() {
+        let mut sidebar = Sidebar::default();
+        let path1 = PathBuf::from("/test/dir1");
+        let path2 = PathBuf::from("/test/dir2");
+
+        sidebar.push_to_history(path1.clone());
+        sidebar.push_to_history(path2.clone());
+
+        // After pushing two paths, we can go back
+        assert!(sidebar.can_go_back());
+        assert!(!sidebar.can_go_forward());
+
+        // Go back returns the previous path
+        let back = sidebar.go_back();
+        assert_eq!(back, Some(path1.clone()));
+
+        // Now we can go forward but not back
+        assert!(!sidebar.can_go_back());
+        assert!(sidebar.can_go_forward());
+    }
+
+    #[test]
+    fn test_sidebar_history_forward() {
+        let mut sidebar = Sidebar::default();
+        let path1 = PathBuf::from("/test/dir1");
+        let path2 = PathBuf::from("/test/dir2");
+
+        sidebar.push_to_history(path1.clone());
+        sidebar.push_to_history(path2.clone());
+
+        // Go back first
+        let _ = sidebar.go_back();
+
+        // Now go forward
+        let forward = sidebar.go_forward();
+        assert_eq!(forward, Some(path2));
+
+        // Can't go forward anymore
+        assert!(!sidebar.can_go_forward());
+        assert!(sidebar.can_go_back());
+    }
+
+    #[test]
+    fn test_sidebar_history_push_clears_forward() {
+        let mut sidebar = Sidebar::default();
+        let path1 = PathBuf::from("/test/dir1");
+        let path2 = PathBuf::from("/test/dir2");
+        let path3 = PathBuf::from("/test/dir3");
+
+        sidebar.push_to_history(path1.clone());
+        sidebar.push_to_history(path2.clone());
+
+        // Go back
+        let _ = sidebar.go_back();
+        assert!(sidebar.can_go_forward());
+
+        // Push a new path - should clear forward history
+        sidebar.push_to_history(path3.clone());
+        assert!(!sidebar.can_go_forward());
+        assert!(sidebar.can_go_back());
     }
 }

@@ -1,9 +1,9 @@
-use dioxus::document;
 use dioxus::prelude::*;
 
 use crate::components::icon::{Icon, IconName};
 use crate::components::theme_selector::ThemeSelector;
 use crate::state::AppState;
+use crate::utils::file_operations;
 
 #[component]
 pub fn Header() -> Element {
@@ -125,12 +125,10 @@ pub fn Header() -> Element {
                             onclick: {
                                 let path_str = path.to_string_lossy().to_string();
                                 move |_| {
-                                    let escaped = path_str.replace('\\', "\\\\").replace('`', "\\`");
+                                    file_operations::copy_to_clipboard(&path_str);
+                                    // Show success feedback
+                                    is_copied.set(true);
                                     spawn(async move {
-                                        let js = format!("navigator.clipboard.writeText(`{}`)", escaped);
-                                        let _ = document::eval(&js).await;
-                                        // Show success feedback
-                                        is_copied.set(true);
                                         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                                         is_copied.set(false);
                                     });
