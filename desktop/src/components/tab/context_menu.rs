@@ -114,6 +114,7 @@ pub fn TabContextMenu(
             ContextMenuItem {
                 label: "Reload",
                 icon: Some(IconName::Refresh),
+                disabled: !has_file,
                 on_click: move |_| on_reload.call(()),
             }
         }
