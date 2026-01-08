@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use dioxus::desktop::tao::window::WindowId;
 use dioxus::prelude::*;
 
+use crate::bookmarks::BOOKMARKS;
 use crate::components::icon::{Icon, IconName};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -20,6 +21,7 @@ pub fn SidebarContextMenu(
     on_open: EventHandler<()>,
     on_open_in_new_window: EventHandler<()>,
     on_move_to_window: EventHandler<WindowId>,
+    on_toggle_bookmark: EventHandler<()>,
     on_copy_path: EventHandler<()>,
     on_reveal_in_finder: EventHandler<()>,
     on_reload: EventHandler<()>,
@@ -28,6 +30,7 @@ pub fn SidebarContextMenu(
     let mut show_submenu = use_signal(|| false);
 
     let is_file = kind == SidebarItemKind::File;
+    let is_bookmarked = BOOKMARKS.read().contains(&path);
 
     // Dynamic labels based on item kind
     let open_label = if is_file {
@@ -104,7 +107,26 @@ pub fn SidebarContextMenu(
                 }
             }
 
-            // === Section 2: File operations ===
+            // === Section 2: Quick Access ===
+            ContextMenuSeparator {}
+
+            div {
+                class: "context-menu-item",
+                onclick: move |_| on_toggle_bookmark.call(()),
+
+                Icon {
+                    name: if is_bookmarked { IconName::StarFilled } else { IconName::Star },
+                    size: 14,
+                    class: "context-menu-icon",
+                }
+
+                span {
+                    class: "context-menu-label",
+                    if is_bookmarked { "Remove from Quick Access" } else { "Add to Quick Access" }
+                }
+            }
+
+            // === Section 3: File operations ===
             ContextMenuSeparator {}
 
             ContextMenuItem {
@@ -119,7 +141,7 @@ pub fn SidebarContextMenu(
                 on_click: move |_| on_reveal_in_finder.call(()),
             }
 
-            // === Section 3: Reload ===
+            // === Section 4: Reload ===
             ContextMenuSeparator {}
 
             ContextMenuItem {

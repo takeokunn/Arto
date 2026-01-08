@@ -8,15 +8,24 @@ function iconSpritePlugin(): Plugin {
   return {
     name: "icon-sprite-generator",
     buildStart() {
-      const iconsDir = path.join(
+      const outlineDir = path.join(
         __dirname,
         "node_modules/@tabler/icons/icons/outline",
+      );
+      const filledDir = path.join(
+        __dirname,
+        "node_modules/@tabler/icons/icons/filled",
       );
 
       const outputPath = path.join(__dirname, "public/icons/tabler-sprite.svg");
       const symbols = icons
         .map((name) => {
-          const svgPath = path.join(iconsDir, `${name}.svg`);
+          // Check if this is a filled icon (e.g., "star-filled" -> filled/star.svg)
+          const isFilled = name.endsWith("-filled");
+          const iconName = isFilled ? name.replace(/-filled$/, "") : name;
+          const iconsDir = isFilled ? filledDir : outlineDir;
+
+          const svgPath = path.join(iconsDir, `${iconName}.svg`);
           const svg = fs.readFileSync(svgPath, "utf-8");
           const content = svg
             .replace(/<svg[^>]*>/, "")

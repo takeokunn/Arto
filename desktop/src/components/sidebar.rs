@@ -1,5 +1,6 @@
 pub mod context_menu;
 pub mod file_explorer;
+pub mod quick_access;
 
 use dioxus::document;
 use dioxus::prelude::*;
