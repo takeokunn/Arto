@@ -55,6 +55,7 @@
 /* Tab bar */
 .right-sidebar-tabs {
   display: flex;
+  gap: 16px;
   padding: 12px 16px 8px;
   flex-shrink: 0;
   margin-left: 8px; /* Account for resize handle */
@@ -174,6 +175,93 @@
   text-align: center;
   padding: 24px 16px;
   color: var(--text-secondary);
+}
+
+/* ============================================
+   Search Tab
+   ============================================ */
+
+.search-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.search-tab-header {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.search-tab-query {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.search-tab-count {
+  color: var(--text-secondary);
+}
+
+.search-tab-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-match-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s;
+}
+
+.search-match-item:hover {
+  background: var(--hover-bg);
+}
+
+.search-match-item.current {
+  background: color-mix(in srgb, var(--accent-bg) 10%, transparent);
+  color: var(--text-primary);
+}
+
+.search-match-item.current::before {
+  content: "▸ ";
+  color: var(--accent-bg);
+}
+
+.search-match-context {
+  color: var(--text-secondary);
+}
+
+.search-match-highlight {
+  background: rgba(255, 235, 59, 0.4);
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* Dark theme adjustment for highlight */
+[data-theme="dark"] .search-match-highlight {
+  background: rgba(255, 235, 59, 0.3);
+}
+
+.search-tab-empty,
+.search-tab-placeholder {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 /* Scrollbar styling */

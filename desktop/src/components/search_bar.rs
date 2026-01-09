@@ -83,6 +83,9 @@ pub fn SearchBar() -> Element {
                     class: "search-input",
                     placeholder: "Search...",
                     autofocus: true,
+                    autocorrect: "off",
+                    autocapitalize: "off",
+                    spellcheck: "false",
                     oninput: move |evt| {
                         has_input.set(!evt.value().is_empty());
                         spawn(async move {

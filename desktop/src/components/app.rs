@@ -9,7 +9,9 @@ use mouse_position::mouse_position::Mouse;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use super::content::{close_context_menu, Content, ContentContextMenu, CONTENT_CONTEXT_MENU};
+use super::content::{
+    close_context_menu, use_search_handler, Content, ContentContextMenu, CONTENT_CONTEXT_MENU,
+};
 use super::header::Header;
 use super::icon::{Icon, IconName};
 use super::right_sidebar::RightSidebar;
@@ -136,6 +138,9 @@ pub fn App(
             .await;
         });
     });
+
+    // Setup search handlers at App level (window-wide feature)
+    use_search_handler(state);
 
     // Handle menu events (only state-dependent events, not global ones)
     use_muda_event_handler(move |event| {

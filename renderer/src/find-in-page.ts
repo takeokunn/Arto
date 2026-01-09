@@ -10,7 +10,38 @@ const state: SearchState = {
   highlightElements: [],
 };
 
-type SearchCallback = (data: { count: number; current: number }) => void;
+/**
+ * Match information for displaying in the Search tab.
+ */
+export interface SearchMatch {
+  /** 0-based index of this match */
+  index: number;
+  /** The matched text itself */
+  text: string;
+  /** Surrounding context including the match */
+  context: string;
+  /** Start position of match within context */
+  contextStart: number;
+  /** End position of match within context */
+  contextEnd: number;
+}
+
+/**
+ * Full search result including all match details.
+ */
+export interface SearchResult {
+  query: string;
+  total: number;
+  current: number;
+  matches: SearchMatch[];
+}
+
+type SearchCallback = (data: {
+  count: number;
+  current: number;
+  query: string;
+  matches: SearchMatch[];
+}) => void;
 
 let callback: SearchCallback | null = null;
 
@@ -137,7 +168,7 @@ export function find(query: string): void {
   state.query = query;
   const container = document.querySelector(".markdown-body");
   if (!container) {
-    callback?.({ count: 0, current: 0 });
+    callback?.({ count: 0, current: 0, query: "", matches: [] });
     return;
   }
 
@@ -149,19 +180,188 @@ export function find(query: string): void {
     state.highlightElements[0]?.classList.add("search-highlight-active");
   }
 
-  callback?.({ count, current: count > 0 ? 1 : 0 });
+  const matches = collectMatches();
+  callback?.({ count, current: count > 0 ? 1 : 0, query: state.query, matches });
 }
 
 export function navigate(direction: "next" | "prev"): void {
   const current = navigateToMatch(direction);
-  callback?.({ count: state.highlightElements.length, current });
+  const matches = collectMatches();
+  callback?.({ count: state.highlightElements.length, current, query: state.query, matches });
 }
 
 export function clear(): void {
+  state.query = "";
   clearHighlights();
-  callback?.({ count: 0, current: 0 });
+  callback?.({ count: 0, current: 0, query: "", matches: [] });
 }
 
 export function setup(cb: SearchCallback): void {
   callback = cb;
+}
+
+/**
+ * Re-apply the current search query after DOM changes (e.g., tab switch).
+ * This preserves the search highlight across tab navigation.
+ */
+export function reapply(): void {
+  if (!state.query) {
+    return;
+  }
+  // Re-run search with stored query
+  find(state.query);
+}
+
+/**
+ * Navigate directly to a specific match by index.
+ * Used by the Search tab for clicking on match items.
+ */
+export function navigateTo(index: number): void {
+  if (index < 0 || index >= state.highlightElements.length) {
+    return;
+  }
+
+  // Remove active class from current match
+  const current = state.highlightElements[state.currentIndex];
+  current?.classList.remove("search-highlight-active");
+
+  // Update index and activate new match
+  state.currentIndex = index;
+  const target = state.highlightElements[index];
+  target?.classList.add("search-highlight-active");
+  target?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  // Notify callback with unified format
+  const newCurrent = index + 1;
+  const matches = collectMatches();
+  callback?.({
+    count: state.highlightElements.length,
+    current: newCurrent,
+    query: state.query,
+    matches,
+  });
+}
+
+/**
+ * Collect context around an element (text before and after).
+ */
+function getContext(
+  element: HTMLElement,
+  maxChars: number,
+): { text: string; matchStart: number; matchEnd: number } {
+  const matchText = element.textContent || "";
+
+  // Get text from siblings and parent text nodes
+  const before = getTextBefore(element, maxChars);
+  const after = getTextAfter(element, maxChars);
+
+  const text = before + matchText + after;
+  const matchStart = before.length;
+  const matchEnd = matchStart + matchText.length;
+
+  return { text, matchStart, matchEnd };
+}
+
+/**
+ * Get text content before an element, up to maxChars.
+ */
+function getTextBefore(element: HTMLElement, maxChars: number): string {
+  let text = "";
+  let node: Node | null = element;
+
+  // Walk backwards through siblings and parent's previous siblings
+  while (node && text.length < maxChars) {
+    if (node.previousSibling) {
+      node = node.previousSibling;
+      const content = getNodeTextContent(node);
+      text = content + text;
+    } else {
+      // Move up to parent and continue
+      node = node.parentElement;
+      if (node && node.closest(".markdown-body")) {
+        continue;
+      }
+      break;
+    }
+  }
+
+  // Trim to maxChars from the end
+  if (text.length > maxChars) {
+    text = "..." + text.slice(-maxChars);
+  }
+
+  return text;
+}
+
+/**
+ * Get text content after an element, up to maxChars.
+ */
+function getTextAfter(element: HTMLElement, maxChars: number): string {
+  let text = "";
+  let node: Node | null = element;
+
+  // Walk forwards through siblings and parent's next siblings
+  while (node && text.length < maxChars) {
+    if (node.nextSibling) {
+      node = node.nextSibling;
+      const content = getNodeTextContent(node);
+      text = text + content;
+    } else {
+      // Move up to parent and continue
+      node = node.parentElement;
+      if (node && node.closest(".markdown-body")) {
+        continue;
+      }
+      break;
+    }
+  }
+
+  // Trim to maxChars from the start
+  if (text.length > maxChars) {
+    text = text.slice(0, maxChars) + "...";
+  }
+
+  return text;
+}
+
+/**
+ * Get text content of a node, handling different node types.
+ */
+function getNodeTextContent(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent || "";
+  }
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const el = node as HTMLElement;
+    // Skip search highlight marks to get actual text
+    if (el.classList.contains("search-highlight")) {
+      return el.textContent || "";
+    }
+    return el.textContent || "";
+  }
+  return "";
+}
+
+/**
+ * Collect all match information for the Search tab.
+ */
+function collectMatches(): SearchMatch[] {
+  const matches: SearchMatch[] = [];
+  const contextChars = 30;
+
+  for (let i = 0; i < state.highlightElements.length; i++) {
+    const el = state.highlightElements[i];
+    const text = el.textContent || "";
+    const context = getContext(el, contextChars);
+
+    matches.push({
+      index: i,
+      text,
+      context: context.text,
+      contextStart: context.matchStart,
+      contextEnd: context.matchEnd,
+    });
+  }
+
+  return matches;
 }

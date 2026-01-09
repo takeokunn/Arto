@@ -13,6 +13,21 @@ mod tabs;
 pub use sidebar::Sidebar;
 pub use tabs::{Tab, TabContent};
 
+/// Information about a single search match for display in the Search tab.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchMatch {
+    /// 0-based index of this match
+    pub index: usize,
+    /// The matched text itself
+    pub text: String,
+    /// Surrounding context including the match
+    pub context: String,
+    /// Start position of match within context (byte index)
+    pub context_start: usize,
+    /// End position of match within context (byte index)
+    pub context_end: usize,
+}
+
 /// Per-window application state.
 ///
 /// # Copy Semantics
@@ -53,6 +68,10 @@ pub struct AppState {
     pub search_current_index: Signal<usize>,
     /// Initial search text to populate when opening search bar
     pub search_initial_text: Signal<Option<String>>,
+    /// Current search query string (for display in Search tab)
+    pub search_query: Signal<Option<String>>,
+    /// All search matches with context (for Search tab display)
+    pub search_matches: Signal<Vec<SearchMatch>>,
 }
 
 impl Default for AppState {
@@ -75,6 +94,8 @@ impl Default for AppState {
             search_match_count: Signal::new(0),
             search_current_index: Signal::new(0),
             search_initial_text: Signal::new(None),
+            search_query: Signal::new(None),
+            search_matches: Signal::new(Vec::new()),
         }
     }
 }
@@ -149,20 +170,33 @@ impl AppState {
     }
 
     /// Toggle search bar visibility
+    ///
+    /// Note: Does NOT clear search state when closing. Search highlights and
+    /// results persist until the user explicitly clears them (via clear button)
+    /// or the content changes. This enables the "persistent highlighting" feature.
     pub fn toggle_search(&mut self) {
         let new_state = !*self.search_open.read();
         self.search_open.set(new_state);
-        if !new_state {
-            // Clear match count when closing
-            self.search_match_count.set(0);
-            self.search_current_index.set(0);
-        }
     }
 
-    /// Update search results from JavaScript callback
+    /// Update search results from JavaScript callback (basic count/current only)
     pub fn update_search_results(&mut self, count: usize, current: usize) {
         self.search_match_count.set(count);
         self.search_current_index.set(current);
+    }
+
+    /// Update full search results from JavaScript callback (includes match details)
+    pub fn update_search_results_full(
+        &mut self,
+        query: Option<String>,
+        count: usize,
+        current: usize,
+        matches: Vec<SearchMatch>,
+    ) {
+        self.search_query.set(query);
+        self.search_match_count.set(count);
+        self.search_current_index.set(current);
+        self.search_matches.set(matches);
     }
 
     /// Open search bar and populate with given text

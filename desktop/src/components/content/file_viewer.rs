@@ -38,7 +38,6 @@ pub fn FileViewer(file: PathBuf) -> Element {
     use_link_click_handler(file.clone(), state);
     use_mermaid_window_handler();
     use_context_menu_handler(file.clone(), base_dir);
-    use_search_handler(state);
 
     rsx! {
         div {
@@ -106,6 +105,10 @@ fn use_file_loader(
                         html.set(plain_html);
                         state.toc_headings.set(Vec::new());
                     }
+
+                    // Re-apply search highlighting after content changes
+                    // This preserves search state across tab switches
+                    reapply_search().await;
                 }
                 Err(e) => {
                     // Failed to read as UTF-8 text (likely binary file)
@@ -122,6 +125,13 @@ fn use_file_loader(
             }
         });
     }));
+}
+
+/// Re-apply search highlighting after DOM changes.
+/// This is called after content rendering to preserve search state across tab switches.
+async fn reapply_search() {
+    // Wait a frame for DOM to update, then reapply search
+    let _ = document::eval("requestAnimationFrame(() => window.Arto.search.reapply());").await;
 }
 
 /// Hook to watch file for changes and trigger reload
@@ -270,29 +280,4 @@ fn use_context_menu_handler(file: PathBuf, base_dir: PathBuf) {
             }
         });
     }));
-}
-
-/// Data structure for search results from JavaScript
-#[derive(Serialize, Deserialize)]
-struct SearchResultData {
-    count: usize,
-    current: usize,
-}
-
-/// Hook to setup search result handler
-fn use_search_handler(mut state: AppState) {
-    use_effect(move || {
-        // Setup JS search handler to receive match counts
-        let mut eval_provider = document::eval(indoc::indoc! {r#"
-            window.Arto.search.setup((data) => {
-                dioxus.send(data);
-            });
-        "#});
-
-        spawn(async move {
-            while let Ok(data) = eval_provider.recv::<SearchResultData>().await {
-                state.update_search_results(data.count, data.current);
-            }
-        });
-    });
 }
