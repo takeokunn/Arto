@@ -31,19 +31,11 @@ pub fn Header() -> Element {
     let is_sidebar_open = state.sidebar.read().open;
 
     let on_back = move |_| {
-        state.update_current_tab(|tab| {
-            if let Some(path) = tab.history.go_back() {
-                tab.content = crate::state::TabContent::File(path.to_owned());
-            }
-        });
+        state.go_back_in_history();
     };
 
     let on_forward = move |_| {
-        state.update_current_tab(|tab| {
-            if let Some(path) = tab.history.go_forward() {
-                tab.content = crate::state::TabContent::File(path.to_owned());
-            }
-        });
+        state.go_forward_in_history();
     };
 
     let is_reloading = use_signal(|| false);

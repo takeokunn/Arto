@@ -76,6 +76,9 @@ pub struct AppState {
     pub search_matches: Signal<Vec<SearchMatch>>,
     /// Pinned search matches by ID (for Search tab display)
     pub pinned_matches: Signal<HashMap<PinnedSearchId, Vec<SearchMatch>>>,
+    /// Pending scroll position to restore after navigation (for back/forward).
+    /// When Some, FileViewer will scroll to this position instead of resetting to top.
+    pub pending_scroll_position: Signal<Option<f64>>,
 }
 
 impl Default for AppState {
@@ -101,6 +104,7 @@ impl Default for AppState {
             search_query: Signal::new(None),
             search_matches: Signal::new(Vec::new()),
             pinned_matches: Signal::new(HashMap::new()),
+            pending_scroll_position: Signal::new(None),
         }
     }
 }

@@ -6,6 +6,7 @@ import * as codeCopy from "./code-copy";
 class RenderCoordinator {
   #rafId: number | null = null;
   #isRendering = false;
+  #renderCompleteCallbacks: Array<() => void> = [];
 
   init(): void {
     const observer = new MutationObserver((mutations) => {
@@ -45,6 +46,26 @@ class RenderCoordinator {
       this.#rafId = null;
       this.#executeBatchRender();
     });
+  }
+
+  /**
+   * Register a one-time callback to be called when the next render completes.
+   * Used for restoring scroll position after Mermaid/KaTeX rendering.
+   */
+  onRenderComplete(callback: () => void): void {
+    this.#renderCompleteCallbacks.push(callback);
+  }
+
+  #fireRenderCompleteCallbacks(): void {
+    const callbacks = this.#renderCompleteCallbacks;
+    this.#renderCompleteCallbacks = [];
+    for (const callback of callbacks) {
+      try {
+        callback();
+      } catch (error) {
+        console.error("RenderCoordinator: Error in render complete callback:", error);
+      }
+    }
   }
 
   forceRenderMermaid(): void {
@@ -118,6 +139,7 @@ class RenderCoordinator {
         }),
       );
       console.debug("RenderCoordinator: Batch render completed");
+      this.#fireRenderCompleteCallbacks();
     } catch (error) {
       console.error("RenderCoordinator: Error during batch render:", error);
     } finally {

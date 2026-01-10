@@ -63,12 +63,12 @@ impl Sidebar {
 
     /// Go back in directory history
     pub fn go_back(&mut self) -> Option<PathBuf> {
-        self.dir_history.go_back().map(|p| p.to_path_buf())
+        self.dir_history.go_back().map(|e| e.path.clone())
     }
 
     /// Go forward in directory history
     pub fn go_forward(&mut self) -> Option<PathBuf> {
-        self.dir_history.go_forward().map(|p| p.to_path_buf())
+        self.dir_history.go_forward().map(|e| e.path.clone())
     }
 }
 

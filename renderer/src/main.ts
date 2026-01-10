@@ -14,6 +14,8 @@ declare global {
     Arto: {
       setupContextMenu: typeof setupContextMenu;
       restoreSelection: typeof restoreSelection;
+      /** Register a callback to be called when rendering (Mermaid, KaTeX, etc.) completes */
+      onRenderComplete: (callback: () => void) => void;
       search: {
         setup: typeof findInPage.setup;
         find: typeof findInPage.find;
@@ -57,6 +59,7 @@ export function init(): void {
   window.Arto = {
     setupContextMenu,
     restoreSelection,
+    onRenderComplete: (callback) => renderCoordinator.onRenderComplete(callback),
     search: {
       setup: findInPage.setup,
       find: findInPage.find,

@@ -238,6 +238,57 @@ impl AppState {
         }
     }
 
+    /// Go back in history for the current tab.
+    /// Returns true if navigation occurred.
+    ///
+    /// Sets pending_scroll_position to restore scroll position after navigation.
+    pub fn go_back_in_history(&mut self) -> bool {
+        let active_index = *self.active_tab.read();
+        let mut tabs = self.tabs.write();
+
+        if let Some(tab) = tabs.get_mut(active_index) {
+            if let Some(entry) = tab.history.go_back() {
+                let path = entry.path.clone();
+                let scroll = entry.scroll_position;
+                tab.content = TabContent::File(path);
+                drop(tabs); // Release borrow before setting signal
+                self.pending_scroll_position.set(Some(scroll));
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Go forward in history for the current tab.
+    /// Returns true if navigation occurred.
+    ///
+    /// Sets pending_scroll_position to restore scroll position after navigation.
+    pub fn go_forward_in_history(&mut self) -> bool {
+        let active_index = *self.active_tab.read();
+        let mut tabs = self.tabs.write();
+
+        if let Some(tab) = tabs.get_mut(active_index) {
+            if let Some(entry) = tab.history.go_forward() {
+                let path = entry.path.clone();
+                let scroll = entry.scroll_position;
+                tab.content = TabContent::File(path);
+                drop(tabs); // Release borrow before setting signal
+                self.pending_scroll_position.set(Some(scroll));
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Save the current scroll position to the current history entry.
+    ///
+    /// Call this before navigating away to preserve scroll position for back/forward.
+    pub fn save_current_scroll_position(&mut self, scroll: f64) {
+        self.update_current_tab(|tab| {
+            tab.history.save_scroll_position(scroll);
+        });
+    }
+
     /// Reload the current tab.
     /// For file tabs, this re-reads the file from disk.
     /// For other tab types, this forces a re-render.

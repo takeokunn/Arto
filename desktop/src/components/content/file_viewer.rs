@@ -14,6 +14,8 @@ use crate::watcher::FILE_WATCHER;
 struct LinkClickData {
     path: String,
     button: u32,
+    /// Current scroll position at the time of click (for history preservation)
+    scroll_position: f64,
 }
 
 /// Mouse button constants
@@ -65,6 +67,9 @@ fn use_file_loader(
 
         spawn(async move {
             tracing::info!("Loading and rendering file: {:?}", &file);
+
+            // Handle scroll position: restore if pending (back/forward), reset to top otherwise
+            handle_scroll_position(&mut state);
 
             // Try to read as string (UTF-8 text file)
             match tokio::fs::read_to_string(file.as_path()).await {
@@ -125,6 +130,34 @@ fn use_file_loader(
             }
         });
     }));
+}
+
+/// Handle scroll position when navigating to a file.
+///
+/// If pending_scroll_position is set (from back/forward navigation), wait for
+/// Mermaid/KaTeX rendering to complete, then restore that position.
+/// Otherwise, reset to top immediately (for new navigation like clicking a link).
+fn handle_scroll_position(state: &mut AppState) {
+    // Check if there's a pending scroll position to restore (from back/forward)
+    let pending_scroll = state.pending_scroll_position.take();
+
+    if let Some(scroll) = pending_scroll {
+        // For back/forward: wait for Mermaid/KaTeX rendering to complete before restoring
+        // This ensures the content height is final before scrolling
+        let scroll_js = format!(
+            r#"window.Arto.onRenderComplete(() => {{
+                document.querySelector('.content')?.scrollTo(0, {});
+                console.debug('Restored scroll position after render:', {});
+            }});"#,
+            scroll, scroll
+        );
+        let _ = document::eval(&scroll_js);
+        tracing::debug!(scroll, "Scheduled scroll position restoration after render");
+    } else {
+        // Reset to top immediately for new navigation
+        let _ = document::eval("document.querySelector('.content')?.scrollTo(0, 0);");
+        tracing::debug!("Reset scroll position to top");
+    }
 }
 
 /// Re-apply search highlighting after DOM changes.
@@ -235,7 +268,8 @@ fn use_link_click_handler(file: PathBuf, state: AppState) {
         let file = file.clone();
         let mut eval_provider = document::eval(indoc::indoc! {r#"
             window.handleMarkdownLinkClick = (path, button) => {
-                dioxus.send({ path, button });
+                const scrollPosition = document.querySelector('.content')?.scrollTop || 0;
+                dioxus.send({ path, button, scroll_position: scrollPosition });
             };
         "#});
 
@@ -256,7 +290,11 @@ fn use_link_click_handler(file: PathBuf, state: AppState) {
 
 /// Handle a markdown link click event
 fn handle_link_click(click_data: LinkClickData, base_dir: &Path, state: &mut AppState) {
-    let LinkClickData { path, button } = click_data;
+    let LinkClickData {
+        path,
+        button,
+        scroll_position,
+    } = click_data;
 
     tracing::info!("Markdown link clicked: {} (button: {})", path, button);
 
@@ -275,6 +313,8 @@ fn handle_link_click(click_data: LinkClickData, base_dir: &Path, state: &mut App
             state.add_file_tab(canonical_path, true);
         }
         LEFT_CLICK => {
+            // Save current scroll position to history before navigating
+            state.save_current_scroll_position(scroll_position);
             // Navigate in current tab (in-tab navigation, no existing tab check)
             state.navigate_to_file(canonical_path);
         }
