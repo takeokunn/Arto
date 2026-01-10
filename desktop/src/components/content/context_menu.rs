@@ -302,25 +302,7 @@ fn ImageContextItems(src: String, on_close: EventHandler<()>) -> Element {
                 let src = src.clone();
                 let on_close = on_close;
                 move |_| {
-                    let src = src.clone();
-                    spawn(async move {
-                        // Use JSON encoding to safely escape the string for JavaScript
-                        let json_src = serde_json::to_string(&src).unwrap_or_default();
-                        let js = format!(
-                            r#"
-                            (() => {{
-                                const a = document.createElement('a');
-                                a.href = {};
-                                a.download = 'image.png';
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                            }})();
-                            "#,
-                            json_src
-                        );
-                        let _ = document::eval(&js).await;
-                    });
+                    crate::utils::image::save_image(&src);
                     on_close.call(());
                 }
             },

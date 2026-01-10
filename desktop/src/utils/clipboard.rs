@@ -9,6 +9,8 @@ use base64::Engine;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
+use super::image::extract_base64_from_data_url;
+
 /// Global clipboard instance held for the application lifetime.
 ///
 /// On Linux, clipboard contents are owned by the application that placed them,
@@ -84,43 +86,5 @@ pub fn copy_image_from_data_url(data_url: impl AsRef<str>) {
     let mut clipboard = CLIPBOARD.lock().unwrap();
     if let Err(e) = clipboard.set_image(image_data) {
         tracing::error!(%e, "Failed to copy image to clipboard");
-    }
-}
-
-/// Extract base64 data from a data URL.
-///
-/// Expects format: `data:<mime-type>;base64,<base64-data>`
-fn extract_base64_from_data_url(data_url: &str) -> Result<&str, &'static str> {
-    // data:image/png;base64,<data>
-    let Some(comma_pos) = data_url.find(',') else {
-        return Err("Invalid data URL: missing comma separator");
-    };
-
-    let prefix = &data_url[..comma_pos];
-    if !prefix.contains(";base64") {
-        return Err("Invalid data URL: not base64 encoded");
-    }
-
-    Ok(&data_url[comma_pos + 1..])
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_base64_from_data_url() {
-        let data_url = "data:image/png;base64,iVBORw0KGgo=";
-        let base64 = extract_base64_from_data_url(data_url).unwrap();
-        assert_eq!(base64, "iVBORw0KGgo=");
-    }
-
-    #[test]
-    fn test_extract_base64_from_data_url_invalid() {
-        let data_url = "not a data url";
-        assert!(extract_base64_from_data_url(data_url).is_err());
-
-        let data_url = "data:image/png,notbase64";
-        assert!(extract_base64_from_data_url(data_url).is_err());
     }
 }
