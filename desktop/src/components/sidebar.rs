@@ -44,7 +44,7 @@ pub fn Sidebar() -> Element {
 
     rsx! {
         div {
-            class: "sidebar",
+            class: "left-sidebar",
             class: if is_visible { "visible" },
             class: if is_resizing() { "resizing" },
             style: "{style}",
@@ -55,7 +55,7 @@ pub fn Sidebar() -> Element {
             // Resize handle (only when visible)
             if is_visible {
                 div {
-                    class: "sidebar-resize-handle",
+                    class: "left-sidebar-resize-handle",
                     class: if is_resizing() { "resizing" },
                     onmousedown: move |evt| {
                         evt.prevent_default();

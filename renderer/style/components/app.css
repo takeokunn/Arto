@@ -6,6 +6,14 @@
   position: relative;
 }
 
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: clip;
+  position: relative; /* For search bar positioning */
+}
+
 /* Drag and drop visual feedback */
 .drag-drop-overlay {
   position: absolute;

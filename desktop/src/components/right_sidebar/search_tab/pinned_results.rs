@@ -24,29 +24,29 @@ pub fn PinnedResultsSection(pinned: PinnedSearch, matches: Vec<SearchMatch>) -> 
 
     rsx! {
         div {
-            class: "pinned-results-section",
+            class: "right-sidebar-pinned-results-section",
 
             // Header: chevron + icon + chip + count (clickable to toggle)
             div {
-                class: "pinned-results-header",
+                class: "right-sidebar-pinned-results-header",
                 onclick: move |_| expanded.toggle(),
 
                 Icon { name: chevron, size: 14 }
                 Icon { name: IconName::Pin, size: 14 }
                 PinnedChip { pinned: pinned.clone() }
-                span { class: "pinned-results-count", "{count} matches" }
+                span { class: "right-sidebar-pinned-results-count", "{count} matches" }
             }
 
             // Match list (collapsible)
             if *expanded.read() {
                 if matches.is_empty() {
                     div {
-                        class: "pinned-results-empty",
+                        class: "right-sidebar-pinned-results-empty",
                         "No matches"
                     }
                 } else {
                     ul {
-                        class: "pinned-results-list",
+                        class: "right-sidebar-pinned-results-list",
                         for m in matches.iter() {
                             PinnedMatchItem {
                                 match_info: m.clone(),
@@ -71,7 +71,7 @@ fn PinnedMatchItem(match_info: SearchMatch, pinned_id: String, color: HighlightC
     // Split context into before, matched, and after parts
     let (before, matched, after) = split_context(&context, start, end);
 
-    let class = format!("pinned-match-item {}", color.css_class());
+    let class = format!("right-sidebar-pinned-item {}", color.css_class());
 
     rsx! {
         li {
@@ -81,9 +81,9 @@ fn PinnedMatchItem(match_info: SearchMatch, pinned_id: String, color: HighlightC
                 move |_| scroll_to_pinned_match(&pinned_id, index)
             },
 
-            span { class: "search-match-context", "{before}" }
-            span { class: "pinned-match-highlight {color.css_class()}", "{matched}" }
-            span { class: "search-match-context", "{after}" }
+            span { class: "right-sidebar-search-context", "{before}" }
+            span { class: "right-sidebar-pinned-highlight {color.css_class()}", "{matched}" }
+            span { class: "right-sidebar-search-context", "{after}" }
         }
     }
 }

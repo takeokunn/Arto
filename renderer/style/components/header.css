@@ -34,7 +34,7 @@
   }
 }
 
-.header-left .sidebar-toggle-button,
+.header-left .left-sidebar-toggle-button,
 .header-left .nav-button {
   flex-shrink: 0;
   background: transparent;
@@ -65,7 +65,7 @@
   }
 }
 
-.header-left .sidebar-toggle-button {
+.header-left .left-sidebar-toggle-button {
   margin-right: 4px;
 
   .icon {
@@ -208,4 +208,26 @@
   &.active .icon {
     opacity: 1;
   }
+}
+
+/* ========================================
+   Header Bookmark Button Context Styles
+   ======================================== */
+
+/* Header bookmark button */
+.file-action-buttons .bookmark-button {
+  opacity: 0;
+}
+
+.header-left:hover .file-action-buttons .bookmark-button {
+  opacity: 0.5;
+}
+
+.file-action-buttons .bookmark-button:hover {
+  opacity: 1 !important;
+}
+
+.file-action-buttons .bookmark-button.bookmarked {
+  opacity: 0.8;
+  color: var(--accent-bg);
 }

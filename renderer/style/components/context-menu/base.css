@@ -1,4 +1,8 @@
-/* Context menu backdrop (closes menu on outside click) */
+/* ========================================
+   Context Menu Base Styles
+   ======================================== */
+
+/* Backdrop (closes menu on outside click) */
 .context-menu-backdrop {
   position: fixed;
   top: 0;
@@ -8,7 +12,7 @@
   z-index: 10001;
 }
 
-/* Context menu container */
+/* Menu container */
 .context-menu {
   position: fixed;
   background: var(--bg-color);
@@ -64,4 +68,36 @@
   margin-left: auto;
   padding-left: 12px;
   opacity: 0.5;
+}
+
+/* ========================================
+   Context Menu Item Elements
+   ======================================== */
+
+/* Menu icon */
+.context-menu-icon {
+  margin-right: 8px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* Menu label */
+.context-menu-label {
+  flex: 1;
+  white-space: nowrap;
+}
+
+/* Keyboard shortcut hint */
+.context-menu-shortcut {
+  margin-left: 24px;
+  opacity: 0.5;
+  font-size: 12px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Separator between menu sections */
+.context-menu-separator {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 8px;
 }

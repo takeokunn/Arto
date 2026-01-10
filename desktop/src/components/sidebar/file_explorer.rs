@@ -54,7 +54,7 @@ pub fn FileExplorer() -> Element {
 
     rsx! {
         div {
-            class: "file-explorer",
+            class: "left-sidebar-explorer",
             key: "{refresh_counter}",
 
             if let Some(root) = root_directory {
@@ -62,7 +62,7 @@ pub fn FileExplorer() -> Element {
                 DirectoryTree { path: root, refresh_counter }
             } else {
                 div {
-                    class: "file-explorer-empty",
+                    class: "left-sidebar-explorer-empty",
                     "No directory open"
                 }
             }
@@ -121,15 +121,15 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
 
     rsx! {
         div {
-            class: "sidebar-header",
+            class: "left-sidebar-header",
 
             // History navigation buttons
             div {
-                class: "sidebar-header-history",
+                class: "left-sidebar-header-history",
 
                 // Go back button
                 button {
-                    class: "sidebar-header-history-button",
+                    class: "left-sidebar-header-history-button",
                     class: if !can_go_back { "disabled" },
                     disabled: !can_go_back,
                     title: "Go back",
@@ -144,7 +144,7 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
 
                 // Go forward button
                 button {
-                    class: "sidebar-header-history-button",
+                    class: "left-sidebar-header-history-button",
                     class: if !can_go_forward { "disabled" },
                     disabled: !can_go_forward,
                     title: "Go forward",
@@ -161,28 +161,28 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
             // Parent directory navigation or root indicator
             if has_parent {
                 div {
-                    class: "sidebar-header-nav",
+                    class: "left-sidebar-header-nav",
                     onclick: move |_| {
                         state.go_to_parent_directory();
                     },
 
                     div {
-                        class: "sidebar-header-content",
+                        class: "left-sidebar-header-content",
                         span {
-                            class: "sidebar-header-label",
+                            class: "left-sidebar-header-label",
                             "{dir_name}"
                         }
 
                         // Action buttons (bookmark, copy & reload) - shown on hover
                         div {
-                            class: "sidebar-header-actions",
+                            class: "left-sidebar-header-actions",
 
                             // Bookmark button
                             BookmarkButton { path: current_dir.clone() }
 
                             // Copy path button
                             button {
-                                class: "sidebar-action-button copy-button",
+                                class: "left-sidebar-action-button copy-button",
                                 class: if *is_copied.read() { "copied" },
                                 title: "Copy directory path",
                                 onclick: {
@@ -205,7 +205,7 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
 
                             // Reload button
                             button {
-                                class: "sidebar-action-button reload-button",
+                                class: "left-sidebar-action-button reload-button",
                                 class: if *is_reloading.read() { "reloading" },
                                 title: "Reload file explorer",
                                 onclick: on_reload,
@@ -220,30 +220,30 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
             } else {
                 // Show root indicator when at filesystem root
                 div {
-                    class: "sidebar-header-nav root-indicator",
+                    class: "left-sidebar-header-nav root-indicator",
 
                     div {
-                        class: "sidebar-header-content",
+                        class: "left-sidebar-header-content",
                         Icon {
                             name: IconName::Server,
                             size: 16,
-                            class: "sidebar-header-icon",
+                            class: "left-sidebar-header-icon",
                         }
                         span {
-                            class: "sidebar-header-label",
+                            class: "left-sidebar-header-label",
                             "/"
                         }
 
                         // Action buttons (bookmark, copy & reload) - shown on hover
                         div {
-                            class: "sidebar-header-actions",
+                            class: "left-sidebar-header-actions",
 
                             // Bookmark button
                             BookmarkButton { path: current_dir.clone() }
 
                             // Copy path button
                             button {
-                                class: "sidebar-action-button copy-button",
+                                class: "left-sidebar-action-button copy-button",
                                 class: if *is_copied.read() { "copied" },
                                 title: "Copy directory path",
                                 onclick: {
@@ -266,7 +266,7 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
 
                             // Reload button
                             button {
-                                class: "sidebar-action-button reload-button",
+                                class: "left-sidebar-action-button reload-button",
                                 class: if *is_reloading.read() { "reloading" },
                                 title: "Reload file explorer",
                                 onclick: on_reload,
@@ -282,11 +282,11 @@ fn DirectoryNavigation(current_dir: PathBuf, mut refresh_counter: Signal<u32>) -
 
             // Toolbar buttons container (visibility toggle only)
             div {
-                class: "sidebar-header-toolbar",
+                class: "left-sidebar-header-toolbar",
 
                 // File visibility toggle button
                 button {
-                    class: "sidebar-header-toolbar-button",
+                    class: "left-sidebar-header-toolbar-button",
                     title: if show_all_files { "Hide non-markdown files" } else { "Show all files" },
                     onclick: move |_| {
                         state.sidebar.write().show_all_files = !show_all_files;
@@ -307,7 +307,7 @@ fn DirectoryTree(path: PathBuf, refresh_counter: Signal<u32>) -> Element {
 
     rsx! {
         div {
-            class: "sidebar-tree",
+            class: "left-sidebar-tree",
             key: "{refresh_counter}",
             for entry in entries {
                 FileTreeNode { path: entry, depth: 0, refresh_counter }
@@ -479,7 +479,7 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
 
     rsx! {
         div {
-            class: "sidebar-tree-node",
+            class: "left-sidebar-tree-node",
             class: if is_active { "active" },
 
             // Full-row clickable design:
@@ -489,7 +489,7 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
             // This allows the entire row to be interactive while providing distinct
             // click areas for different actions.
             div {
-                class: "sidebar-tree-node-content",
+                class: "left-sidebar-tree-node-content",
                 style: "{indent_style}",
                 oncontextmenu: handle_context_menu,
                 onclick: {
@@ -508,7 +508,7 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                 if is_dir {
                     // Chevron: click to expand/collapse
                     span {
-                        class: "sidebar-tree-chevron-wrapper",
+                        class: "left-sidebar-tree-chevron-wrapper",
                         onclick: {
                             let path = path.clone();
                             move |evt| {
@@ -519,13 +519,13 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                         Icon {
                             name: if is_expanded { IconName::ChevronDown } else { IconName::ChevronRight },
                             size: 16,
-                            class: "sidebar-tree-chevron",
+                            class: "left-sidebar-tree-chevron",
                         }
                     }
 
                     // Folder icon + label: click to set as root directory
                     span {
-                        class: "sidebar-tree-dir-link",
+                        class: "left-sidebar-tree-dir-link",
                         onclick: {
                             let path = path.clone();
                             move |evt| {
@@ -536,18 +536,18 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                         Icon {
                             name: if is_expanded { IconName::FolderOpen } else { IconName::Folder },
                             size: 16,
-                            class: "sidebar-tree-icon",
+                            class: "left-sidebar-tree-icon",
                         }
                         span {
-                            class: "sidebar-tree-label",
+                            class: "left-sidebar-tree-label",
                             "{name}"
                         }
                     }
                 } else {
                     // File: spacer + icon + label, click to open
-                    span { class: "sidebar-tree-spacer" }
+                    span { class: "left-sidebar-tree-spacer" }
                     span {
-                        class: "sidebar-tree-file-link",
+                        class: "left-sidebar-tree-file-link",
                         onclick: {
                             let path = path.clone();
                             move |evt| {
@@ -558,10 +558,10 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                         Icon {
                             name: IconName::File,
                             size: 16,
-                            class: "sidebar-tree-icon",
+                            class: "left-sidebar-tree-icon",
                         }
                         span {
-                            class: "sidebar-tree-label",
+                            class: "left-sidebar-tree-label",
                             class: if !is_markdown { "disabled" },
                             "{name}"
                         }
@@ -573,7 +573,7 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
 
                 // Copy path button
                 button {
-                    class: "sidebar-tree-copy-button",
+                    class: "left-sidebar-tree-copy-button",
                     class: if *is_copied.read() { "copied" },
                     title: "Copy full path",
                     onclick: move |evt| {

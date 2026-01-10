@@ -1,20 +1,36 @@
+/* Variables and utilities */
 @import url("./variables.css");
 @import url("./scrollbar.css");
-@import url("./components/app.css");
+
+/* Shared components */
 @import url("./components/icon.css");
-@import url("./components/sidebar.css");
-@import url("./components/quick-access.css");
+@import url("./components/buttons/bookmark.css");
+@import url("./components/context-menu/base.css");
+@import url("./components/context-menu/content.css");
+
+/* Layout */
+@import url("./components/app.css");
 @import url("./components/header.css");
-@import url("./components/pinned-chips.css");
-@import url("./components/search-bar.css");
 @import url("./components/tab-bar.css");
-@import url("./components/tab-context-menu.css");
-@import url("./components/content-context-menu.css");
+@import url("./components/search-bar.css");
+@import url("./components/pinned-chips.css");
+
+/* Left sidebar */
+@import url("./components/left-sidebar.css");
+@import url("./components/left-sidebar/quick-access.css");
+
+/* Right sidebar */
+@import url("./components/right-sidebar.css");
+
+/* Content area */
 @import url("./components/content.css");
 @import url("./components/content/code-copy.css");
-@import url("./components/right-sidebar.css");
-@import url("./components/mermaid-window.css");
+
+/* Special windows */
 @import url("./components/preferences.css");
+@import url("./components/mermaid-window.css");
+
+/* External */
 @import url("katex/dist/katex.min.css");
 
 /* App-wide styling */

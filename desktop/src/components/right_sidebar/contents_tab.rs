@@ -7,16 +7,16 @@ use crate::markdown::HeadingInfo;
 pub fn ContentsTab(headings: Vec<HeadingInfo>) -> Element {
     rsx! {
         div {
-            class: "contents-tab",
+            class: "right-sidebar-contents",
 
             if headings.is_empty() {
                 div {
-                    class: "contents-empty",
+                    class: "right-sidebar-contents-empty",
                     "No headings found"
                 }
             } else {
                 ul {
-                    class: "contents-list",
+                    class: "right-sidebar-contents-list",
                     for heading in headings.iter() {
                         HeadingItem { heading: heading.clone() }
                     }
@@ -33,11 +33,11 @@ fn HeadingItem(heading: HeadingInfo) -> Element {
 
     rsx! {
         li {
-            class: "contents-item",
+            class: "right-sidebar-contents-item",
             "data-level": "{level}",
 
             button {
-                class: "contents-item-button",
+                class: "right-sidebar-contents-item-button",
                 onclick: move |_| {
                     let id = id.clone();
                     spawn(async move {

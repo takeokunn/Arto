@@ -1,0 +1,138 @@
+/* ========================================
+   Right Sidebar Pinned Search Section
+   ======================================== */
+
+.right-sidebar-pinned {
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 16px;
+}
+
+.right-sidebar-pinned-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.right-sidebar-pinned-add-button {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-secondary);
+  transition: background 0.15s;
+}
+
+.right-sidebar-pinned-add-button:hover {
+  background: var(--hover-bg);
+}
+
+.right-sidebar-pinned-add-input {
+  margin-bottom: 8px;
+}
+
+.right-sidebar-pinned-add-input input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  box-sizing: border-box;
+}
+
+.right-sidebar-pinned-add-input input:focus {
+  outline: none;
+  border-color: var(--accent-bg);
+}
+
+/* ========================================
+   Right Sidebar Pinned Results Section
+   ======================================== */
+
+.right-sidebar-pinned-results {
+  margin-top: 8px;
+}
+
+.right-sidebar-pinned-results:first-child {
+  margin-top: 0;
+}
+
+.right-sidebar-pinned-results:not(:last-child) {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+}
+
+.right-sidebar-pinned-results-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.right-sidebar-pinned-results-header:hover {
+  background: var(--hover-bg);
+}
+
+.right-sidebar-pinned-results-header .icon {
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.right-sidebar-pinned-results-count {
+  color: var(--text-secondary);
+}
+
+.right-sidebar-pinned-results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.right-sidebar-pinned-results-empty {
+  padding: 12px 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.right-sidebar-pinned-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s;
+}
+
+.right-sidebar-pinned-item:hover {
+  background: var(--hover-bg);
+}
+
+/* Pinned match highlight colors */
+.right-sidebar-pinned-highlight {
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.right-sidebar-pinned-highlight.highlight-green { background-color: var(--pinned-green); }
+.right-sidebar-pinned-highlight.highlight-blue { background-color: var(--pinned-blue); }
+.right-sidebar-pinned-highlight.highlight-pink { background-color: var(--pinned-pink); }
+.right-sidebar-pinned-highlight.highlight-orange { background-color: var(--pinned-orange); }
+.right-sidebar-pinned-highlight.highlight-purple { background-color: var(--pinned-purple); }

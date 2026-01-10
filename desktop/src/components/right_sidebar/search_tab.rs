@@ -40,7 +40,7 @@ pub fn SearchTab() -> Element {
 
     rsx! {
         div {
-            class: "search-tab",
+            class: "right-sidebar-search",
 
             // Active search results
             if let Some(q) = query {
@@ -78,7 +78,7 @@ pub fn SearchTab() -> Element {
 fn SearchTabPlaceholder() -> Element {
     rsx! {
         div {
-            class: "search-tab-placeholder",
+            class: "right-sidebar-search-placeholder",
             "Type in the search bar or add pinned searches"
         }
     }
@@ -96,29 +96,29 @@ fn SearchResultsSection(query: String, matches: Vec<SearchMatch>, current_index:
 
     rsx! {
         div {
-            class: "search-results-section",
+            class: "right-sidebar-search-results",
 
             // Header (clickable to toggle)
             div {
-                class: "search-tab-header",
+                class: "right-sidebar-search-header",
                 onclick: move |_| expanded.toggle(),
 
                 Icon { name: chevron, size: 14 }
                 Icon { name: IconName::Search, size: 14 }
-                span { class: "search-tab-query", "\"{query}\"" }
-                span { class: "search-tab-count", " - {matches.len()} matches" }
+                span { class: "right-sidebar-search-query", "\"{query}\"" }
+                span { class: "right-sidebar-search-count", " - {matches.len()} matches" }
             }
 
             // Match list (collapsible)
             if *expanded.read() {
                 if matches.is_empty() {
                     div {
-                        class: "search-tab-empty",
+                        class: "right-sidebar-search-empty",
                         "No matches found"
                     }
                 } else {
                     ul {
-                        class: "search-tab-list",
+                        class: "right-sidebar-search-list",
                         for m in matches.iter() {
                             SearchMatchItem {
                                 match_info: m.clone(),
@@ -143,9 +143,9 @@ fn SearchMatchItem(match_info: SearchMatch, is_current: bool) -> Element {
     let (before, matched, after) = split_context(&context, start, end);
 
     let class = if is_current {
-        "search-match-item current"
+        "right-sidebar-search-item current"
     } else {
-        "search-match-item"
+        "right-sidebar-search-item"
     };
 
     rsx! {
@@ -153,9 +153,9 @@ fn SearchMatchItem(match_info: SearchMatch, is_current: bool) -> Element {
             class: "{class}",
             onclick: move |_| scroll_to_match(index),
 
-            span { class: "search-match-context", "{before}" }
-            span { class: "search-match-highlight", "{matched}" }
-            span { class: "search-match-context", "{after}" }
+            span { class: "right-sidebar-search-context", "{before}" }
+            span { class: "right-sidebar-search-highlight", "{matched}" }
+            span { class: "right-sidebar-search-context", "{after}" }
         }
     }
 }

@@ -80,7 +80,7 @@ pub fn Header() -> Element {
 
                 // Sidebar toggle button
                 button {
-                    class: "sidebar-toggle-button",
+                    class: "left-sidebar-toggle-button",
                     class: if is_sidebar_open { "active" },
                     onclick: move |_| {
                         state.toggle_sidebar();

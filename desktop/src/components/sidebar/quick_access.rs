@@ -69,22 +69,22 @@ pub fn QuickAccess() -> Element {
 
     rsx! {
         div {
-            class: "quick-access",
+            class: "left-sidebar-quick-access",
 
             // Header
             div {
-                class: "quick-access-header",
+                class: "left-sidebar-quick-access-header",
                 Icon {
                     name: IconName::StarFilled,
                     size: 14,
-                    class: "quick-access-header-icon",
+                    class: "left-sidebar-quick-access-header-icon",
                 }
-                span { class: "quick-access-title", "QUICK ACCESS" }
+                span { class: "left-sidebar-quick-access-title", "QUICK ACCESS" }
             }
 
             // Bookmark items
             div {
-                class: "quick-access-list",
+                class: "left-sidebar-quick-access-list",
                 ondragover: move |evt| {
                     evt.stop_propagation();
                     evt.prevent_default();
@@ -159,7 +159,7 @@ fn QuickAccessItem(
         IconName::File
     };
 
-    let mut classes = vec!["quick-access-item"];
+    let mut classes = vec!["left-sidebar-quick-access-item"];
     if !exists {
         classes.push("missing");
     }
@@ -210,7 +210,7 @@ fn QuickAccessItem(
 
             // Drag handle indicator (visual only, drag is on parent)
             span {
-                class: "quick-access-item-drag-handle",
+                class: "left-sidebar-quick-access-item-drag-handle",
                 draggable: false,
                 Icon {
                     name: IconName::ArrowsMove,
@@ -222,12 +222,12 @@ fn QuickAccessItem(
             Icon {
                 name: icon_name,
                 size: 14,
-                class: "quick-access-item-icon",
+                class: "left-sidebar-quick-access-item-icon",
             }
 
             // Name
             span {
-                class: "quick-access-item-name",
+                class: "left-sidebar-quick-access-item-name",
                 "{display_name}"
             }
 
