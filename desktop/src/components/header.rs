@@ -31,11 +31,11 @@ pub fn Header() -> Element {
     let is_sidebar_open = state.sidebar.read().open;
 
     let on_back = move |_| {
-        state.go_back_in_history();
+        state.save_scroll_and_go_back();
     };
 
     let on_forward = move |_| {
-        state.go_forward_in_history();
+        state.save_scroll_and_go_forward();
     };
 
     let is_reloading = use_signal(|| false);

@@ -38,6 +38,9 @@ pub fn Content() -> Element {
     // This ensures fonts and images remain sharp at any zoom level
     let zoom_style = format!("zoom: {};", zoom_level());
 
+    // Set up scroll position tracking via JavaScript
+    use_scroll_position_tracker(state);
+
     rsx! {
         div {
             class: "content",
@@ -65,4 +68,39 @@ pub fn Content() -> Element {
             }
         }
     }
+}
+
+/// Hook to track scroll position via JavaScript and update state.
+/// Uses a passive scroll listener that sends position updates to Rust.
+fn use_scroll_position_tracker(mut state: AppState) {
+    use_effect(move || {
+        let mut eval = document::eval(indoc::indoc! {r#"
+            // Set up scroll listener on .content element
+            const content = document.querySelector('.content');
+            if (content) {
+                // Remove any existing listener to prevent duplicates
+                if (window.__artoScrollHandler) {
+                    content.removeEventListener('scroll', window.__artoScrollHandler);
+                }
+
+                // Create and store the scroll handler
+                window.__artoScrollHandler = () => {
+                    dioxus.send(content.scrollTop);
+                };
+
+                // Send scroll position on every scroll event
+                // We send immediately to minimize latency for back/forward navigation
+                content.addEventListener('scroll', window.__artoScrollHandler, { passive: true });
+
+                // Send initial position
+                dioxus.send(content.scrollTop);
+            }
+        "#});
+
+        spawn(async move {
+            while let Ok(scroll) = eval.recv::<f64>().await {
+                state.current_scroll_position.set(scroll);
+            }
+        });
+    });
 }

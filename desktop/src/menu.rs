@@ -398,10 +398,10 @@ pub fn handle_menu_event_with_state(event: &MenuEvent, state: &mut AppState) -> 
             state.zoom_level.set((current - 0.1).max(0.1));
         }
         MenuId::GoBack => {
-            state.go_back_in_history();
+            state.save_scroll_and_go_back();
         }
         MenuId::GoForward => {
-            state.go_forward_in_history();
+            state.save_scroll_and_go_forward();
         }
         MenuId::RevealInFinder => {
             if let Some(file) = get_current_file(state) {

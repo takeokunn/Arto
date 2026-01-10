@@ -65,11 +65,13 @@ fn use_file_loader(
         let _ = reload_trigger();
         let file = file.clone();
 
+        // Handle scroll position SYNCHRONOUSLY before spawning async task.
+        // This ensures the onRenderComplete callback is registered before
+        // MutationObserver triggers #executeBatchRender().
+        handle_scroll_position(&mut state);
+
         spawn(async move {
             tracing::info!("Loading and rendering file: {:?}", &file);
-
-            // Handle scroll position: restore if pending (back/forward), reset to top otherwise
-            handle_scroll_position(&mut state);
 
             // Try to read as string (UTF-8 text file)
             match tokio::fs::read_to_string(file.as_path()).await {
