@@ -26,11 +26,18 @@ To open a markdown file:
 
 **File & Directory**
 
-| Shortcut      | Action                       |
-| :------------ | :--------------------------- |
-| `Cmd+O`       | Open a file                  |
-| `Cmd+Shift+O` | Open a directory             |
-| `Cmd+B`       | Toggle sidebar file explorer |
+| Shortcut        | Action                       |
+| :-------------- | :--------------------------- |
+| `Cmd+O`         | Open a file                  |
+| `Cmd+Shift+O`   | Open a directory             |
+| `Cmd+B`         | Toggle sidebar file explorer |
+| `Cmd+Shift+R`   | Reveal in Finder             |
+
+**Search**
+
+| Shortcut | Action       |
+| :------- | :----------- |
+| `Cmd+F`  | Find in page |
 
 **Navigation**
 
@@ -55,22 +62,36 @@ To open a markdown file:
 | `Cmd+0`  | Reset zoom to actual size |
 | `Cmd+=`  | Zoom in                   |
 | `Cmd+-`  | Zoom out                  |
+| `Cmd+,`  | Open Preferences          |
 
 ## Key Features
 
 Arto faithfully reproduces GitHub's Markdown rendering in a local, offline environment, offering a calm and precise reading experience with thoughtful typography and balanced whitespace.
 
-**Highlights:**
+**Reading & Navigation:**
 
 - **File Explorer** — Built-in sidebar for browsing directories and files
+- **Quick Access** — Bookmark frequently used files for instant access
+- **Table of Contents** — Automatic TOC panel for easy document navigation
+- **Find in Page** — Search within documents with highlighting
+- **Pinned Search** — Pin queries with persistent multi-color highlighting
+- **History Navigation** — Back/forward navigation through document links
+
+**Rendering:**
+
 - **Tab Support** — Open multiple documents in tabs within a single window
 - **Multi-Window** — Create separate windows and child windows for diagrams
-- **Mermaid Diagrams** — Interactive diagram viewer with zoom, pan, and export
-- **Code Blocks** — Copy buttons for easy code sharing
+- **Mermaid Diagrams** — Interactive viewer with zoom, pan, and copy-as-image
 - **Math Support** — Beautiful KaTeX rendering for mathematical expressions
+- **Code Blocks** — Syntax highlighting with copy buttons
+- **Frontmatter** — Renders YAML frontmatter as a styled, collapsible table
+
+**Experience:**
+
 - **Auto-Reload** — Automatically updates when files change on disk
 - **Theme Support** — Manual and automatic dark/light mode switching
-- **History Navigation** — Back/forward navigation through document links
+- **Cross-Window Tabs** — Drag and drop tabs between windows
+- **Context Menus** — Right-click for quick actions on files and content
 - **Offline First** — No internet required — read anywhere, anytime
 
 ---

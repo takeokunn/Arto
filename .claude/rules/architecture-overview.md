@@ -19,8 +19,8 @@ Understanding the relationship between Config, PersistedState, and State modules
 │ - File: state.json                                          │
 │ - Edited by: App (auto-saved on window close)              │
 │ - Contains: Last closed window's state (PersistedState)     │
-│ - Example: "last_theme": "dark"                             │
-│           "last_directory": "/path/to/project"              │
+│ - Example: "theme": "dark"                                  │
+│           "directory": "/path/to/project"                   │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -80,11 +80,16 @@ Understanding the relationship between Config, PersistedState, and State modules
 **Example content:**
 ```json
 {
-  "lastDirectory": "/Users/alice/project/docs",
-  "lastTheme": "dark",
-  "lastSidebarVisible": true,
-  "lastSidebarWidth": 320.0,
-  "lastShowAllFiles": false
+  "directory": "/Users/alice/project/docs",
+  "theme": "dark",
+  "sidebarOpen": true,
+  "sidebarWidth": 320.0,
+  "sidebarShowAllFiles": false,
+  "rightSidebarOpen": false,
+  "rightSidebarWidth": 280.0,
+  "rightSidebarTab": "toc",
+  "windowPosition": { "x": 100, "y": 100 },
+  "windowSize": { "width": 1200, "height": 800 }
 }
 ```
 
@@ -107,7 +112,7 @@ Understanding the relationship between Config, PersistedState, and State modules
 pub struct AppState {
     pub tabs: Signal<Vec<Tab>>,              // Open tabs
     pub active_tab: Signal<usize>,           // Which tab is active
-    pub current_theme: Signal<ThemePreference>, // Current theme
+    pub current_theme: Signal<Theme>,        // Current theme
     pub zoom_level: Signal<f64>,             // Zoom level
     pub sidebar: Signal<SidebarState>,       // Sidebar state
 }
@@ -128,11 +133,11 @@ pub struct AppState {
    └─> Config { directory.on_startup: "default" }
 
 2. Load state.json
-   ├─> PersistedState { last_theme: "dark" }
-   └─> PersistedState { last_directory: "/path/to/project" }
+   ├─> PersistedState { theme: "dark" }
+   └─> PersistedState { directory: "/path/to/project" }
 
 3. Apply startup behavior using window::settings helpers
-   ├─> Theme: "last_closed" → Use persisted.last_theme ("dark")
+   ├─> Theme: "last_closed" → Use persisted.theme ("dark")
    └─> Directory: "default" → Use config.default_directory
 
 4. Create AppState with computed values
@@ -208,50 +213,46 @@ pub struct AppState {
 ```rust
 // In window/settings.rs
 pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
-    let config = CONFIG.read();
-    let last_focused = LAST_FOCUSED_STATE.read();
-
-    if is_first_window {
-        match config.theme.on_startup {
-            StartupBehavior::Default => config.theme.default_theme,
-            StartupBehavior::LastClosed => last_focused.theme.unwrap_or(config.theme.default_theme),
-        }
-    } else {
-        match config.theme.on_new_window {
-            NewWindowBehavior::Default => config.theme.default_theme,
-            NewWindowBehavior::LastFocused => last_focused.theme.unwrap_or(config.theme.default_theme),
-        }
-    }
+    let cfg = CONFIG.read();
+    let theme = choose_by_behavior(
+        is_first_window,
+        cfg.theme.on_startup,
+        cfg.theme.on_new_window,
+        || cfg.theme.default_theme,
+        || LAST_FOCUSED_STATE.read().theme,
+    );
+    ThemePreference { theme }
 }
 ```
 
 **Priority:**
 1. Check config behavior setting (`on_startup` or `on_new_window`)
 2. If "default" → use `config.theme.default_theme`
-3. If "last_closed"/"last_focused" → use `LAST_FOCUSED_STATE.theme` (fallback to config default)
+3. If "last_closed"/"last_focused" → use `LAST_FOCUSED_STATE.theme` directly
+
+**Note:** `LAST_FOCUSED_STATE.theme` is always valid (initialized from `state.json` or defaults to `Theme::default()`)
 
 ### Updating a value during runtime
 
 ```rust
-// In App component (or AppState methods)
+// In component (e.g., ThemeSelector)
 let mut state = use_context::<AppState>();
 
-// User changes theme - AppState automatically updates LAST_FOCUSED_STATE
-state.set_theme(ThemePreference::Dark);
+// User changes theme - update Signal directly
+state.current_theme.set(Theme::Dark);
 
-// Inside AppState::set_theme()
-pub fn set_theme(&mut self, theme: ThemePreference) {
-    self.current_theme.set(theme);
-
-    // Update global for "last_focused" behavior
-    let mut last_focused = LAST_FOCUSED_STATE.write();
-    last_focused.theme = Some(theme);
-}
+// Sync to LAST_FOCUSED_STATE via use_effect
+use_effect(move || {
+    let theme = state.current_theme();
+    LAST_FOCUSED_STATE.write().theme = theme;
+});
 ```
 
-**Two updates:**
-1. Update `AppState` for current window
-2. Update `LAST_FOCUSED_STATE` global for next "new window"
+**Pattern for updating state:**
+1. Update `AppState.current_theme` Signal for current window UI
+2. Use `use_effect` to automatically sync to `LAST_FOCUSED_STATE` for next "new window"
+
+**Note:** AppState methods (like `set_root_directory`, `toggle_right_sidebar`) handle both updates internally for convenience
 
 ### Saving on window close
 
@@ -319,4 +320,5 @@ pub static LAST_FOCUSED_STATE: LazyLock<RwLock<PersistedState>> =
 | **Edited by** | User | App | App | App |
 | **Updated** | Manual/UI | On close | Real-time | Real-time |
 | **Used for** | Defaults | Last closed | Current | Last focused |
-| **Example field** | `default_theme` | `last_theme` | `current_theme` | `theme` |
+| **Example field** | `default_theme` | `theme` | `current_theme` | `theme` |
+| **Example value** | `Theme::Auto` | `Theme::Dark` | `Theme::Dark` | `Theme::Dark` |

@@ -90,19 +90,14 @@ if let Some(mut path) = dirs::config_local_dir() {
 // window/settings.rs provides unified preference resolution
 pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
     let cfg = CONFIG.read();
-    let last_focused = LAST_FOCUSED_STATE.read();
-
-    if is_first_window {
-        match cfg.theme.on_startup {
-            StartupBehavior::Default => cfg.theme.default_theme,
-            StartupBehavior::LastClosed => last_focused.theme.unwrap_or(cfg.theme.default_theme),
-        }
-    } else {
-        match cfg.theme.on_new_window {
-            NewWindowBehavior::Default => cfg.theme.default_theme,
-            NewWindowBehavior::LastFocused => last_focused.theme.unwrap_or(cfg.theme.default_theme),
-        }
-    }
+    let theme = choose_by_behavior(
+        is_first_window,
+        cfg.theme.on_startup,
+        cfg.theme.on_new_window,
+        || cfg.theme.default_theme,
+        || LAST_FOCUSED_STATE.read().theme,
+    );
+    ThemePreference { theme }
 }
 ```
 
@@ -192,7 +187,7 @@ pub struct ThemeConfig {
 // Good - Type-safe enum
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ThemePreference {
+pub enum Theme {
     #[default]
     Auto,   // → "auto"
     Light,  // → "light"
@@ -200,7 +195,7 @@ pub enum ThemePreference {
 }
 
 pub struct ThemeConfig {
-    pub default_theme: ThemePreference,
+    pub default_theme: Theme,
 }
 ```
 

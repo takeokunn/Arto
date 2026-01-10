@@ -183,7 +183,7 @@ pub struct Config {
 ```rust
 pub fn save_sync(
     directory: Option<PathBuf>,
-    theme: Option<ThemePreference>,
+    theme: Option<Theme>,
     sidebar_visible: Option<bool>,
     sidebar_width: Option<f64>,
     show_all_files: Option<bool>,
@@ -280,8 +280,8 @@ rsx! {
 
 **1. Global Statics** (app-wide, shared across windows):
 ```rust
-pub static CONFIG: LazyLock<Mutex<Config>> = ...;
-pub static LAST_SELECTED_THEME: LazyLock<Mutex<ThemePreference>> = ...;
+pub static CONFIG: LazyLock<RwLock<Config>> = ...;
+pub static LAST_FOCUSED_STATE: LazyLock<RwLock<PersistedState>> = ...;
 pub static TRANSFER_TAB_TO_WINDOW: LazyLock<broadcast::Sender<...>> = ...;
 ```
 
@@ -395,7 +395,7 @@ FILE_WATCHER.with(|watcher| {
 ```rust
 pub enum StartupBehavior {
     Default,      // Use config.default_theme
-    LastClosed,   // Use state.last_theme
+    LastClosed,   // Use persisted.theme
 }
 
 pub enum NewWindowBehavior {
@@ -406,14 +406,13 @@ pub enum NewWindowBehavior {
 
 **Implementation pattern:**
 ```rust
-pub async fn get_startup_theme() -> ThemePreference {
-    let config = CONFIG.lock().await;
+pub fn get_startup_theme() -> Theme {
+    let config = CONFIG.read();
     let persisted = PersistedState::load();
 
     match config.theme.on_startup {
         StartupBehavior::Default => config.theme.default_theme,
-        StartupBehavior::LastClosed => persisted.last_theme
-            .unwrap_or(config.theme.default_theme),
+        StartupBehavior::LastClosed => persisted.theme,
     }
 }
 ```
@@ -439,7 +438,7 @@ pub async fn get_startup_theme() -> ThemePreference {
 
 ```rust
 // ❌ Don't leave unused imports
-use crate::theme::ThemePreference;  // warning: unused import
+use crate::theme::Theme;  // warning: unused import
 
 // ✓ Remove or use them
 ```
@@ -735,7 +734,7 @@ pub struct PersistedState {
     #[serde(default)]  // ← Unnecessary
     pub directory: Option<PathBuf>,
     #[serde(default)]  // ← Unnecessary
-    pub theme: ThemePreference,
+    pub theme: Theme,
 }
 
 // Usage: serde_json::from_str(&content).unwrap_or_default()
@@ -745,7 +744,7 @@ pub struct PersistedState {
 #[derive(Default, Serialize, Deserialize)]
 pub struct PersistedState {
     pub directory: Option<PathBuf>,
-    pub theme: ThemePreference,
+    pub theme: Theme,
 }
 ```
 
