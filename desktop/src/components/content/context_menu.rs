@@ -302,7 +302,11 @@ fn ImageContextItems(src: String, on_close: EventHandler<()>) -> Element {
                 let src = src.clone();
                 let on_close = on_close;
                 move |_| {
-                    crate::utils::image::save_image(&src);
+                    // Run in background thread to prevent UI blocking during HTTP download
+                    let src = src.clone();
+                    std::thread::spawn(move || {
+                        crate::utils::image::save_image(&src);
+                    });
                     on_close.call(());
                 }
             },

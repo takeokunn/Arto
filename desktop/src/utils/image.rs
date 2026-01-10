@@ -6,6 +6,13 @@
 //! - Downloading images from external URLs
 
 use base64::Engine;
+use std::time::Duration;
+
+/// Maximum allowed image size (20 MiB) to prevent memory exhaustion.
+const MAX_IMAGE_SIZE: u64 = 20 * 1024 * 1024;
+
+/// HTTP request timeout in seconds.
+const REQUEST_TIMEOUT_SECS: u64 = 30;
 
 /// Save an image from a URL (data URL or HTTP/HTTPS) to a file using a native save dialog.
 ///
@@ -122,33 +129,117 @@ fn get_file_info_from_mime_type(
 /// Download an image from an HTTP/HTTPS URL.
 ///
 /// Returns the image bytes and the content-type header if available.
+///
+/// # Security
+///
+/// This function includes several safety mechanisms:
+/// - Request timeout to prevent indefinite hangs
+/// - Maximum content length check to prevent memory exhaustion
+/// - Content-type validation to ensure the response is an image
 fn download_image(url: &str) -> Result<(Vec<u8>, Option<String>), String> {
+    use std::io::Read;
+
     let response = ureq::get(url)
+        .config()
+        .timeout_global(Some(Duration::from_secs(REQUEST_TIMEOUT_SECS)))
+        .build()
         .call()
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
+    // Extract and normalize content-type
     let content_type = response
         .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.split(';').next().unwrap_or(s).trim().to_string());
 
-    let bytes = response
-        .into_body()
-        .read_to_vec()
+    // Ensure the URL points to an image if content-type is provided
+    if let Some(ct) = &content_type {
+        if !ct.starts_with("image/") {
+            return Err(format!(
+                "URL does not point to an image (content-type: {})",
+                ct
+            ));
+        }
+    }
+
+    // Enforce a maximum content length based on the Content-Length header, if present
+    if let Some(len) = response
+        .headers()
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok())
+    {
+        if len > MAX_IMAGE_SIZE {
+            return Err(format!(
+                "Image is too large ({} bytes, max {} bytes)",
+                len, MAX_IMAGE_SIZE
+            ));
+        }
+    }
+
+    // Read the response body with a hard cap on the number of bytes
+    let reader = response.into_body().into_reader();
+    let mut bytes = Vec::new();
+
+    // Limit the reader to MAX_IMAGE_SIZE + 1 to detect oversized responses
+    reader
+        .take(MAX_IMAGE_SIZE + 1)
+        .read_to_end(&mut bytes)
         .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    if bytes.len() as u64 > MAX_IMAGE_SIZE {
+        return Err(format!(
+            "Image is too large (received more than {} bytes)",
+            MAX_IMAGE_SIZE
+        ));
+    }
 
     Ok((bytes, content_type))
 }
 
 /// Extract the filename from a URL path.
+///
+/// This function:
+/// - Removes query strings from the URL
+/// - Decodes URL-encoded characters (e.g., `%20` → space)
+/// - Sanitizes the filename by removing path separators and dangerous characters
 fn extract_filename_from_url(url: &str) -> Option<String> {
     let path = url.split('?').next()?; // Remove query string
     let filename = path.rsplit('/').next()?;
     if filename.is_empty() || !filename.contains('.') {
         return None;
     }
-    Some(filename.to_string())
+
+    // Decode URL-encoded characters
+    let decoded = percent_encoding::percent_decode_str(filename)
+        .decode_utf8()
+        .ok()?;
+
+    // Sanitize: remove path separators and other dangerous characters
+    let sanitized = sanitize_filename(&decoded);
+    if sanitized.is_empty() || !sanitized.contains('.') {
+        return None;
+    }
+
+    Some(sanitized)
+}
+
+/// Sanitize a filename by removing path separators and dangerous characters.
+///
+/// This prevents path traversal attacks and ensures the filename is safe for the file system.
+fn sanitize_filename(filename: &str) -> String {
+    filename
+        .chars()
+        .filter(|c| {
+            // Allow alphanumeric, dots, hyphens, underscores, and spaces
+            // Reject path separators and other special characters
+            c.is_alphanumeric() || matches!(c, '.' | '-' | '_' | ' ')
+        })
+        .collect::<String>()
+        // Remove leading/trailing dots and spaces for safety
+        .trim_matches(|c| c == '.' || c == ' ')
+        .to_string()
 }
 
 /// Extract the file extension from a URL path.
@@ -234,6 +325,7 @@ mod tests {
 
     #[test]
     fn test_extract_filename_from_url() {
+        // Basic filename extraction
         assert_eq!(
             extract_filename_from_url("https://example.com/images/photo.png"),
             Some("photo.png".to_string())
@@ -247,6 +339,52 @@ mod tests {
             extract_filename_from_url("https://example.com/noextension"),
             None
         );
+    }
+
+    #[test]
+    fn test_extract_filename_from_url_decoding() {
+        // URL decoding
+        assert_eq!(
+            extract_filename_from_url("https://example.com/my%20image.png"),
+            Some("my image.png".to_string())
+        );
+        assert_eq!(
+            extract_filename_from_url("https://example.com/photo%20%282%29.jpg"),
+            Some("photo 2.jpg".to_string()) // Parentheses are filtered out
+        );
+    }
+
+    #[test]
+    fn test_extract_filename_from_url_sanitization() {
+        // Path traversal attempts should be sanitized
+        assert_eq!(
+            extract_filename_from_url("https://example.com/..%2F..%2Fevil.png"),
+            Some("evil.png".to_string())
+        );
+        // Slashes in filename should be removed
+        assert_eq!(
+            extract_filename_from_url("https://example.com/file%2Fwith%2Fslashes.png"),
+            Some("filewithslashes.png".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sanitize_filename() {
+        // Normal filenames
+        assert_eq!(sanitize_filename("image.png"), "image.png");
+        assert_eq!(sanitize_filename("my-photo_2024.jpg"), "my-photo_2024.jpg");
+
+        // Path separators removed
+        assert_eq!(sanitize_filename("../../evil.png"), "evil.png");
+        assert_eq!(sanitize_filename("path/to/file.png"), "pathtofile.png");
+        assert_eq!(sanitize_filename("path\\to\\file.png"), "pathtofile.png");
+
+        // Leading/trailing dots removed
+        assert_eq!(sanitize_filename(".hidden.png"), "hidden.png");
+        assert_eq!(sanitize_filename("file.png."), "file.png");
+
+        // Special characters removed
+        assert_eq!(sanitize_filename("file<>:\"|?*.png"), "file.png");
     }
 
     #[test]
