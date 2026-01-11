@@ -9,7 +9,7 @@ Design patterns and best practices for structuring configuration modules in Rust
 ```
 desktop/src/
 ├── config/
-│   ├── app_config.rs        # Module entry point (re-exports only)
+│   ├── app_config.rs        # Submodule declarations, Config struct, tests
 │   ├── app_config/          # Config type definitions and enums
 │   │   ├── behavior.rs
 │   │   ├── directory_config.rs
@@ -21,14 +21,14 @@ desktop/src/
 │   ├── app_state/           # Per-window state types
 │   │   ├── sidebar.rs
 │   │   └── tabs.rs
-│   └── persistence.rs       # PersistedState (saved on window close)
+│   └── persistence.rs       # PersistedState + LAST_FOCUSED_STATE global
 └── window/
-    └── helpers.rs           # Startup/new window value resolution
+    └── settings.rs          # Startup/new window preference resolution
 ```
 
 ### Module Entry Point Pattern
 
-**Entry point files should only declare modules and re-export public APIs:**
+**Entry point files typically declare modules and re-export public APIs:**
 
 ```rust
 // config/app_config.rs
@@ -48,9 +48,13 @@ pub struct Config {
     pub theme: ThemeConfig,
     pub sidebar: SidebarConfig,
 }
+
+// Tests can live here too
+#[cfg(test)]
+mod tests { ... }
 ```
 
-**Do NOT implement complex logic in entry point modules.**
+**Note:** In Arto's case, `app_config.rs` also contains the `Config` struct definition and tests. This is acceptable for configuration entry points. The key principle is to avoid complex business logic in entry point modules.
 
 ## Configuration vs State Separation
 
@@ -80,24 +84,20 @@ if let Some(mut path) = dirs::config_local_dir() {
 
 ## Startup vs New Window Pattern
 
-**Use value resolution helpers in window/helpers.rs:**
+**Use value resolution helpers in window/settings.rs:**
 
 ```rust
-// window/helpers.rs provides unified value resolution
-pub fn get_theme_value(is_first_window: bool) -> ThemeValue {
+// window/settings.rs provides unified preference resolution
+pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
     let cfg = CONFIG.read();
-    let theme = if is_first_window {
-        match cfg.theme.on_startup {
-            StartupBehavior::Default => cfg.theme.default_theme,
-            StartupBehavior::LastClosed => LAST_FOCUSED_STATE.read().theme,
-        }
-    } else {
-        match cfg.theme.on_new_window {
-            NewWindowBehavior::Default => cfg.theme.default_theme,
-            NewWindowBehavior::LastFocused => LAST_FOCUSED_STATE.read().theme,
-        }
-    };
-    ThemeValue { theme }
+    let theme = choose_by_behavior(
+        is_first_window,
+        cfg.theme.on_startup,
+        cfg.theme.on_new_window,
+        || cfg.theme.default_theme,
+        || LAST_FOCUSED_STATE.read().theme,
+    );
+    ThemePreference { theme }
 }
 ```
 
@@ -105,19 +105,19 @@ pub fn get_theme_value(is_first_window: bool) -> ThemeValue {
 
 ```rust
 // First window (startup)
-let theme = get_theme_value(true);
-let dir = get_directory_value(true);
-let sidebar = get_sidebar_value(true);
+let theme = window::settings::get_theme_preference(true);
+let directory = window::settings::get_directory_preference(true);
+let sidebar = window::settings::get_sidebar_preference(true);
 
 // Subsequent windows
-let theme = get_theme_value(false);
-let dir = get_directory_value(false);
-let sidebar = get_sidebar_value(false);
+let theme = window::settings::get_theme_preference(false);
+let directory = window::settings::get_directory_preference(false);
+let sidebar = window::settings::get_sidebar_preference(false);
 ```
 
 **Key differences:**
-- **Startup** (`is_first_window: true`): Uses `LAST_FOCUSED_STATE` (saved from last closed window)
-- **New Window** (`is_first_window: false`): Uses `LAST_FOCUSED_STATE` (updated by last focused window)
+- **Startup** (`is_first_window: true`): Uses `LAST_FOCUSED_STATE` (saved from last closed window's state.json)
+- **New Window** (`is_first_window: false`): Uses `LAST_FOCUSED_STATE` (updated in real-time by last focused window)
 
 ## Avoid Duplicate Enums
 
@@ -187,7 +187,7 @@ pub struct ThemeConfig {
 // Good - Type-safe enum
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ThemePreference {
+pub enum Theme {
     #[default]
     Auto,   // → "auto"
     Light,  // → "light"
@@ -195,7 +195,7 @@ pub enum ThemePreference {
 }
 
 pub struct ThemeConfig {
-    pub default_theme: ThemePreference,
+    pub default_theme: Theme,
 }
 ```
 

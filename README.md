@@ -22,21 +22,49 @@ Arto faithfully reproduces GitHub's Markdown rendering in a local, offline envir
 
 ## Features
 
-- **GitHub-Style Rendering**: Accurate reproduction of GitHub's Markdown styling with full support for extended syntax
-- **Native Performance**: Built with Rust for fast, responsive rendering
-- **File Explorer**: Built-in sidebar with file tree navigation for browsing local directories
-- **Tab Support**: Open and manage multiple documents in tabs within a single window
-- **Multi-Window**: Create multiple windows and open child windows for diagrams
-- **Auto-Reload**: Automatically updates when the file changes on disk
-- **Dark Mode**: Manual and automatic theme switching based on system preferences
-- **Advanced Rendering**: Support for Mermaid diagrams, math expressions (KaTeX), code syntax highlighting, and more
-- **Mermaid Window**: View Mermaid diagrams in a separate, interactive window with zoom and pan controls
-- **Code Block Features**: Copy button for code blocks, copy Mermaid source as image
-- **Drag & Drop**: Simply drag markdown files onto the window to open them
-- **Live Navigation**: Navigate between linked markdown documents with history support (back/forward)
-- **Offline First**: No internet connection required — read your docs anytime, anywhere
+### Core Reading Experience
 
-## Usage
+- **GitHub-Style Rendering** — Accurate reproduction of GitHub's Markdown styling with full support for extended syntax
+- **Native Performance** — Built with Rust for fast, responsive rendering
+- **Auto-Reload** — Automatically updates when the file changes on disk
+- **Offline First** — No internet connection required — read your docs anytime, anywhere
+
+### Navigation & Organization
+
+- **File Explorer** — Built-in sidebar with file tree navigation for browsing local directories
+- **Quick Access** — Bookmark frequently used files and directories for instant access
+- **Directory History** — Back/forward navigation within the sidebar file explorer
+- **Table of Contents** — Automatic TOC panel for easy document navigation
+- **Live Navigation** — Navigate between linked markdown documents with history support (back/forward)
+
+### Search & Discovery
+
+- **Find in Page** — Search within documents with `Cmd+F`
+- **Pinned Search** — Pin search queries with persistent multi-color highlighting across sessions
+
+### Window & Tab Management
+
+- **Tab Support** — Open and manage multiple documents in tabs within a single window
+- **Multi-Window** — Create multiple windows and open child windows for diagrams
+- **Cross-Window Tabs** — Drag and drop tabs between windows
+- **Drag & Drop** — Simply drag markdown files onto the window to open them
+
+### Advanced Rendering
+
+- **Mermaid Diagrams** — Interactive diagram viewer with zoom, pan, and copy-as-image
+- **Math Expressions** — Beautiful KaTeX rendering for mathematical notation
+- **Code Highlighting** — Syntax highlighting with copy button for code blocks
+- **Frontmatter** — Renders YAML frontmatter as a styled, collapsible table
+- **GitHub Alerts** — Full support for NOTE, TIP, IMPORTANT, WARNING, and CAUTION alerts
+
+### Customization
+
+- **Dark Mode** — Manual and automatic theme switching based on system preferences
+- **Zoom Controls** — Keyboard shortcuts and trackpad gestures for zoom
+- **Preferences** — Configurable settings for sidebar, TOC, and more
+- **Context Menus** — Right-click menus for quick actions on files and content
+
+## Installation
 
 Use [Homebrew] tap to install. Since the application is not signed or notarized with an Apple Developer ID, you'll need to remove the quarantine attribute after installation.
 See [homebrew-tap] for more information.
@@ -75,34 +103,14 @@ Launch the application to see the welcome screen with keyboard shortcuts and usa
 [home-manager]: https://github.com/nix-community/home-manager
 
 ## Screenshots
+
 <img alt="CleanShot 2025-10-26 at 16 24 54" src="https://github.com/user-attachments/assets/675b9a2f-9e1d-4355-bd05-f475b77e62e6" />
 <img alt="CleanShot 2025-10-26 at 16 25 13" src="https://github.com/user-attachments/assets/5012a3ce-9741-4b2e-9fb2-e8c5868638f8" />
 <img alt="CleanShot 2025-10-26 at 16 25 31" src="https://github.com/user-attachments/assets/84fc6c60-4166-4330-a83b-370d5e2fa534" />
 
-## Development
+## Contributing
 
-- [pnpm](https://pnpm.io/)
-- [Rust](https://rust-lang.org/)
-- [just](https://github.com/casey/just)
-- [dioxus-cli](https://crates.io/crates/dioxus-cli)
-
-```bash
-git clone https://github.com/arto-app/Arto.git
-cd Arto
-just setup  # or `nix develop` if you have Nix installed
-
-# For development
-cargo run --release
-
-# For production build (macOS)
-just build
-
-# To install in /Applications (macOS)
-just install
-```
-
-The binary will be available at `target/release/arto` or `target/dx/arto/bundle/macos/bundle/`.
-
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 

@@ -62,11 +62,11 @@ This command runs:
 ```rust
 // First window (synchronous initialization in main())
 let is_first_window = true;
-let theme_value = window::helpers::get_theme_value(is_first_window);
-let directory_value = window::helpers::get_directory_value(is_first_window, file.as_ref(), directory);
-let sidebar_value = window::helpers::get_sidebar_value(is_first_window);
+let theme = window::settings::get_theme_preference(is_first_window);
+let directory = window::settings::get_directory_preference(is_first_window);
+let sidebar = window::settings::get_sidebar_preference(is_first_window);
 
-// Launch MainApp with pre-resolved values
+// Launch MainApp with pre-resolved preferences
 dioxus::LaunchBuilder::desktop()
     .with_cfg(config)
     .launch(components::main_app::MainApp);
@@ -87,26 +87,35 @@ window_manager::create_new_main_window(file, directory, show_welcome);
 // In App component
 use_drop(move || {
     // Save state on window close
-    config::save_session_sync(
-        Some(current_dir),
-        Some(current_theme),
-        Some(sidebar_visible),
-        Some(sidebar_width),
-        Some(show_all_files),
-    );
+    let mut persisted = PersistedState::from(&state);
 
-    // Close child windows
-    window::close_child_windows();
+    // Capture window metrics for restoration
+    let window_metrics = crate::window::metrics::capture_window_metrics(&window().window);
+    persisted.window_position = window_metrics.position;
+    persisted.window_size = window_metrics.size;
+
+    // Update last focused state
+    {
+        let mut last_focused = LAST_FOCUSED_STATE.write();
+        last_focused.window_position = window_metrics.position;
+        last_focused.window_size = window_metrics.size;
+    }
+
+    // Save to disk (synchronous, blocking)
+    persisted.save();
+
+    // Close child windows owned by this window
+    crate::window::close_child_windows_for_parent(window_id);
 });
 ```
 
-**IMPORTANT:** Use `persisted.save_sync()` in `use_drop()` context (synchronous, blocking).
+**IMPORTANT:** The `save()` method is synchronous and blocking, suitable for `use_drop()` context.
 
 ### State Management Hierarchy
 
 **Three-tier system (see TIPS.md and architecture-overview.md for details):**
 
-1. **Global Statics** - Shared across windows (CONFIG, LAST_SELECTED_THEME, broadcast channels)
+1. **Global Statics** - Shared across windows (CONFIG, LAST_FOCUSED_STATE, broadcast channels)
 2. **Context (AppState)** - Per-window state (tabs, active tab, zoom)
 3. **Local (use_signal)** - Component-only UI state
 
@@ -115,7 +124,7 @@ use_drop(move || {
 2. Fallback to `Config` defaults
 
 **New window priority:**
-1. In-memory globals (last focused window)
+1. In-memory `LAST_FOCUSED_STATE` (last focused window)
 2. Fallback to `Config` defaults
 
 ### Configuration System
@@ -139,7 +148,7 @@ use_drop(move || {
 - `spawn_forever()` - Infinite loops (broadcast listeners)
 - `use_drop()` - Cleanup (synchronous only!)
 
-**Critical:** `spawn_forever()` never returns. `use_drop()` is synchronous - use `persisted.save_sync()` for blocking operations.
+**Critical:** `spawn_forever()` never returns. `use_drop()` is synchronous - use `persisted.save()` for blocking operations.
 
 ### Markdown Rendering Pipeline
 
@@ -236,8 +245,10 @@ element!("a[href]", |el| {
 #### Menu ID Pattern
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MenuId {
+enum MenuId {
+    // App menu
+    About,
+
     // File menu
     NewWindow,
     OpenFile,
@@ -253,19 +264,32 @@ pub enum MenuId {
     ZoomOut,
     ZoomReset,
 
-    // Custom items (replace predefined)
-    About,
+    // Window menu
     Preferences,
 }
 
-impl From<MenuId> for MenuItemId {
-    fn from(id: MenuId) -> Self {
-        MenuItemId::new(format!("{:?}", id))
+impl MenuId {
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "app.about" => Some(Self::About),
+            "file.new_window" => Some(Self::NewWindow),
+            "file.open_file" => Some(Self::OpenFile),
+            // ... other mappings
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::About => "app.about",
+            Self::NewWindow => "file.new_window",
+            // ... other mappings
+        }
     }
 }
 ```
 
-**Why enum over strings:** Type safety, autocomplete, refactoring support.
+**Why enum over strings:** Type safety, autocomplete, refactoring support. Menu IDs use hierarchical string format (e.g., `"app.about"`, `"file.new_window"`).
 
 #### Split Handler Pattern
 

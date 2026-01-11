@@ -231,7 +231,7 @@ if let Some(t) = theme {
 ```rust
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ThemePreference {
+pub enum Theme {
     Auto,   // → "auto"
     Light,  // → "light"
     Dark,   // → "dark"
@@ -239,7 +239,7 @@ pub enum ThemePreference {
 
 #[test]
 fn test_theme_serialization() {
-    let theme = ThemePreference::Auto;
+    let theme = Theme::Auto;
     let json = serde_json::to_string(&theme).unwrap();
     assert_eq!(json, r#""auto""#);
 }
