@@ -52,8 +52,9 @@
               pkgs.pnpmConfigHook
             ];
 
-            pnpmDeps = pkgs.pnpm_9.fetchDeps {
+            pnpmDeps = pkgs.fetchPnpmDeps {
               inherit (finalAttrs) pname version src;
+              pnpm = pkgs.pnpm_9;
               # To update this hash when renderer dependencies change:
               # 1. Change hash to: lib.fakeHash or ""
               # 2. Run: nix build .#renderer-assets
