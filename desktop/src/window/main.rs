@@ -286,17 +286,6 @@ pub(crate) fn get_last_focused_window() -> Option<WindowId> {
     LAST_FOCUSED_WINDOW.with(|last| *last.borrow())
 }
 
-/// Clear the last focused window if it matches the given window ID.
-/// Called when a window is closed to prevent stale references.
-pub fn clear_last_focused_if_matches(window_id: WindowId) {
-    LAST_FOCUSED_WINDOW.with(|last| {
-        let mut last = last.borrow_mut();
-        if *last == Some(window_id) {
-            *last = None;
-        }
-    });
-}
-
 fn find_window_metrics(window_id: WindowId) -> Option<WindowMetrics> {
     list_main_windows()
         .into_iter()
