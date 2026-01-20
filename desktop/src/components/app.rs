@@ -293,10 +293,6 @@ pub fn App(
             }
         }
 
-        // Clear last focused window if this window was the last focused
-        // Prevents stale WindowId references in find_window_at_point
-        crate::window::clear_last_focused_if_matches(window_id);
-
         // Save last used state from this window
         // Read directly from state signals instead of global statics
         // to ensure we get the current window's values, not the global last-modified values

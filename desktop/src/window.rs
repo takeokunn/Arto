@@ -52,10 +52,9 @@ pub use child::{
     open_or_focus_mermaid_window,
 };
 pub use main::{
-    clear_last_focused_if_matches, close_all_main_windows, create_main_window_config,
-    create_new_main_window_with_empty, create_new_main_window_with_file,
-    focus_last_focused_main_window, has_any_main_windows, register_main_window,
-    update_last_focused_window, CreateMainWindowConfigParams,
+    close_all_main_windows, create_main_window_config, create_new_main_window_with_empty,
+    create_new_main_window_with_file, focus_last_focused_main_window, has_any_main_windows,
+    register_main_window, update_last_focused_window, CreateMainWindowConfigParams,
 };
 pub use preview::{
     close_preview_window, commit_preview_window, create_preview_window, discard_preview_window,
