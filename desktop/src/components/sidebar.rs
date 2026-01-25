@@ -5,7 +5,7 @@ pub mod quick_access;
 use dioxus::document;
 use dioxus::prelude::*;
 
-use crate::state::{AppState, LAST_FOCUSED_STATE};
+use crate::state::AppState;
 
 #[component]
 pub fn Sidebar() -> Element {
@@ -30,7 +30,6 @@ pub fn Sidebar() -> Element {
                 if current_width > max_width {
                     let clamped = current_width.clamp(200.0, max_width);
                     state.sidebar.write().width = clamped;
-                    LAST_FOCUSED_STATE.write().sidebar_width = clamped;
                 }
             }
         });
@@ -100,9 +99,6 @@ pub fn Sidebar() -> Element {
                                         }
                                     }
                                     "end" => {
-                                        // Update last focused sidebar width when resize ends
-                                        let final_width = state.sidebar.read().width;
-                                        LAST_FOCUSED_STATE.write().sidebar_width = final_width;
                                         is_resizing.set(false);
                                         break;
                                     }

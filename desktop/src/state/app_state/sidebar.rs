@@ -1,4 +1,3 @@
-use super::super::persistence::LAST_FOCUSED_STATE;
 use super::AppState;
 use crate::history::HistoryManager;
 use dioxus::prelude::*;
@@ -77,7 +76,6 @@ impl AppState {
     pub fn toggle_sidebar(&mut self) {
         let mut sidebar = self.sidebar.write();
         sidebar.open = !sidebar.open;
-        LAST_FOCUSED_STATE.write().sidebar_open = sidebar.open;
     }
 
     /// Toggle directory expansion state

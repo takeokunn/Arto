@@ -1,4 +1,5 @@
 use dioxus::desktop::tao::dpi::{LogicalPosition, LogicalSize};
+use dioxus::prelude::*;
 use mouse_position::mouse_position::Mouse;
 use std::path::PathBuf;
 
@@ -6,9 +7,10 @@ use crate::config::{
     NewWindowBehavior, StartupBehavior, WindowDimension, WindowDimensionUnit, WindowPosition,
     WindowPositionMode, WindowSize, CONFIG,
 };
-use crate::state::{Position, Size, LAST_FOCUSED_STATE};
+use crate::state::{PersistedState, Position, Size};
 use crate::theme::Theme;
 use crate::utils::screen::{get_current_display_bounds, get_cursor_display, get_primary_display};
+use crate::window::main::get_last_focused_window_state;
 
 const MIN_WINDOW_DIMENSION: f64 = 100.0;
 
@@ -164,6 +166,16 @@ fn window_position_from_state(position: Position) -> WindowPosition {
     }
 }
 
+/// Get window metrics from last focused window's AppState.
+/// Uses WINDOW_STATES mapping for O(1) access instead of iterating windows.
+fn get_last_focused_metrics() -> Option<(Position, Size)> {
+    get_last_focused_window_state().map(|state| {
+        let position = (*state.position.read()).into();
+        let size = (*state.size.read()).into();
+        (position, size)
+    })
+}
+
 fn resolve_window_settings(
     is_first_window: bool,
 ) -> (WindowPosition, WindowPositionMode, WindowSize) {
@@ -173,7 +185,13 @@ fn resolve_window_settings(
         cfg.window_position.on_startup,
         cfg.window_position.on_new_window,
         || cfg.window_position.default_position,
-        || window_position_from_state(LAST_FOCUSED_STATE.read().window_position),
+        || {
+            get_last_focused_metrics()
+                .map(|(pos, _)| window_position_from_state(pos))
+                .unwrap_or_else(|| {
+                    window_position_from_state(PersistedState::load().window_position)
+                })
+        },
     );
     let position_mode = choose_by_behavior(
         is_first_window,
@@ -187,7 +205,11 @@ fn resolve_window_settings(
         cfg.window_size.on_startup,
         cfg.window_size.on_new_window,
         || cfg.window_size.default_size,
-        || window_size_from_state(LAST_FOCUSED_STATE.read().window_size),
+        || {
+            get_last_focused_metrics()
+                .map(|(_, sz)| window_size_from_state(sz))
+                .unwrap_or_else(|| window_size_from_state(PersistedState::load().window_size))
+        },
     );
 
     (position, position_mode, size)
@@ -204,7 +226,11 @@ pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
         cfg.theme.on_startup,
         cfg.theme.on_new_window,
         || cfg.theme.default_theme,
-        || LAST_FOCUSED_STATE.read().theme,
+        || {
+            get_last_focused_window_state()
+                .map(|state| *state.current_theme.read())
+                .unwrap_or_else(|| PersistedState::load().theme)
+        },
     );
     ThemePreference { theme }
 }
@@ -217,10 +243,9 @@ pub fn get_directory_preference(is_first_window: bool) -> DirectoryPreference {
         cfg.directory.on_new_window,
         || cfg.directory.default_directory.clone(),
         || {
-            LAST_FOCUSED_STATE
-                .read()
-                .directory
-                .clone()
+            get_last_focused_window_state()
+                .and_then(|state| state.sidebar.read().root_directory.clone())
+                .or_else(|| PersistedState::load().directory)
                 .or_else(|| cfg.directory.default_directory.clone())
         },
     );
@@ -239,11 +264,20 @@ pub fn get_sidebar_preference(is_first_window: bool) -> SidebarPreference {
             show_all_files: cfg.sidebar.default_show_all_files,
         },
         || {
-            let state = LAST_FOCUSED_STATE.read();
-            SidebarPreference {
-                open: state.sidebar_open,
-                width: state.sidebar_width,
-                show_all_files: state.sidebar_show_all_files,
+            if let Some(state) = get_last_focused_window_state() {
+                let sidebar = state.sidebar.read();
+                SidebarPreference {
+                    open: sidebar.open,
+                    width: sidebar.width,
+                    show_all_files: sidebar.show_all_files,
+                }
+            } else {
+                let persisted = PersistedState::load();
+                SidebarPreference {
+                    open: persisted.sidebar_open,
+                    width: persisted.sidebar_width,
+                    show_all_files: persisted.sidebar_show_all_files,
+                }
             }
         },
     )
@@ -260,10 +294,17 @@ pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
             width: cfg.right_sidebar.default_width,
         },
         || {
-            let state = LAST_FOCUSED_STATE.read();
-            TocPreference {
-                open: state.right_sidebar_open,
-                width: state.right_sidebar_width,
+            if let Some(state) = get_last_focused_window_state() {
+                TocPreference {
+                    open: *state.right_sidebar_open.read(),
+                    width: *state.right_sidebar_width.read(),
+                }
+            } else {
+                let persisted = PersistedState::load();
+                TocPreference {
+                    open: persisted.right_sidebar_open,
+                    width: persisted.right_sidebar_width,
+                }
             }
         },
     )

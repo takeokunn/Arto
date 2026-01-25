@@ -3,8 +3,8 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::persistence::LAST_FOCUSED_STATE;
 use crate::components::right_sidebar::RightSidebarTab;
+use crate::config::DEFAULT_RIGHT_SIDEBAR_WIDTH;
 use crate::markdown::HeadingInfo;
 use crate::pinned_search::PinnedSearchId;
 use crate::theme::Theme;
@@ -84,18 +84,19 @@ pub struct AppState {
     pub current_scroll_position: Signal<f64>,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        let persisted = LAST_FOCUSED_STATE.read();
+impl AppState {
+    /// Create a new AppState with the specified theme.
+    /// Used when creating windows with specific initial state.
+    pub fn new(theme: Theme) -> Self {
         Self {
             tabs: Signal::new(vec![Tab::default()]),
             active_tab: Signal::new(0),
-            current_theme: Signal::new(persisted.theme),
+            current_theme: Signal::new(theme),
             zoom_level: Signal::new(1.0),
             sidebar: Signal::new(Sidebar::default()),
-            right_sidebar_open: Signal::new(persisted.right_sidebar_open),
-            right_sidebar_width: Signal::new(persisted.right_sidebar_width),
-            right_sidebar_tab: Signal::new(persisted.right_sidebar_tab),
+            right_sidebar_open: Signal::new(false),
+            right_sidebar_width: Signal::new(DEFAULT_RIGHT_SIDEBAR_WIDTH),
+            right_sidebar_tab: Signal::new(RightSidebarTab::default()),
             toc_headings: Signal::new(Vec::new()),
             position: Signal::new(Default::default()),
             size: Signal::new(Default::default()),
@@ -113,6 +114,12 @@ impl Default for AppState {
     }
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new(Theme::default())
+    }
+}
+
 impl AppState {
     /// Set the root directory and add to history
     /// Note: The directory is persisted to state file when window closes
@@ -121,16 +128,14 @@ impl AppState {
         let mut sidebar = self.sidebar.write();
         sidebar.root_directory = Some(path.clone());
         sidebar.expanded_dirs.clear();
-        sidebar.push_to_history(path.clone());
-        LAST_FOCUSED_STATE.write().directory = Some(path);
+        sidebar.push_to_history(path);
     }
 
     /// Set the root directory without adding to history (used for history navigation)
     fn set_root_directory_no_history(&mut self, path: PathBuf) {
         let mut sidebar = self.sidebar.write();
-        sidebar.root_directory = Some(path.clone());
+        sidebar.root_directory = Some(path);
         sidebar.expanded_dirs.clear();
-        LAST_FOCUSED_STATE.write().directory = Some(path);
     }
 
     /// Go back in directory history
@@ -167,19 +172,16 @@ impl AppState {
     pub fn toggle_right_sidebar(&mut self) {
         let new_state = !*self.right_sidebar_open.read();
         self.right_sidebar_open.set(new_state);
-        LAST_FOCUSED_STATE.write().right_sidebar_open = new_state;
     }
 
     /// Set right sidebar width
     pub fn set_right_sidebar_width(&mut self, width: f64) {
         self.right_sidebar_width.set(width);
-        LAST_FOCUSED_STATE.write().right_sidebar_width = width;
     }
 
     /// Set right sidebar active tab
     pub fn set_right_sidebar_tab(&mut self, tab: RightSidebarTab) {
         self.right_sidebar_tab.set(tab);
-        LAST_FOCUSED_STATE.write().right_sidebar_tab = tab;
     }
 
     /// Toggle search bar visibility

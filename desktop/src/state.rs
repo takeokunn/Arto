@@ -4,4 +4,4 @@ mod app_state;
 pub use app_state::{AppState, SearchMatch, Sidebar, Tab, TabContent};
 
 mod persistence;
-pub use persistence::{PersistedState, Position, Size, LAST_FOCUSED_STATE};
+pub use persistence::{PersistedState, Position, Size};

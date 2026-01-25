@@ -4,21 +4,22 @@ use dioxus::desktop::{window, Config, DesktopService, WeakDesktopContext, Window
 use dioxus::prelude::*;
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
+
+use crate::state::AppState;
 
 use crate::assets::MAIN_STYLE;
 use crate::components::app::{App, AppProps};
 use crate::config::{WindowPositionOffset, CONFIG};
-use crate::state::{Tab, LAST_FOCUSED_STATE};
+use crate::state::Tab;
 use crate::theme::Theme;
 use crate::utils::screen::get_current_display_bounds;
 
-use super::child;
 use super::index::build_custom_index;
 use super::metrics::capture_window_metrics;
 use super::settings;
-use super::types::WindowMetrics;
 
 const MAX_POSITION_SHIFT_ATTEMPTS: usize = 20;
 
@@ -91,10 +92,11 @@ impl Default for CreateMainWindowConfigParams {
 thread_local! {
     static MAIN_WINDOWS: RefCell<Vec<WeakDesktopContext>> = const { RefCell::new(Vec::new()) };
     static LAST_FOCUSED_WINDOW: RefCell<Option<WindowId>> = const { RefCell::new(None) };
+    static WINDOW_STATES: RefCell<HashMap<WindowId, AppState>> = RefCell::new(HashMap::new());
 }
 
 /// List all active (upgraded) main window contexts
-fn list_main_windows() -> Vec<Rc<DesktopService>> {
+pub fn list_main_windows() -> Vec<Rc<DesktopService>> {
     MAIN_WINDOWS.with(|windows| {
         windows
             .borrow()
@@ -135,23 +137,36 @@ pub fn has_any_main_windows() -> bool {
     !list_visible_main_windows().is_empty()
 }
 
-pub fn focus_last_focused_main_window() -> bool {
-    if let Some(window_id) = get_last_focused_window() {
-        // Resolve to parent window if the last focused was a child window
-        let main_window_id = child::resolve_to_parent_window(window_id);
+/// Get the MainApp window (the first window registered).
+///
+/// MainApp is the first window launched from main.rs with WindowCloseBehaviour::WindowHides.
+/// It remains in memory even when hidden, unlike additional windows which are destroyed on close.
+///
+/// # Panics
+///
+/// Panics if MainApp is not registered or was unexpectedly dropped.
+/// This should never happen in normal operation.
+fn get_main_app_window() -> Rc<DesktopService> {
+    MAIN_WINDOWS.with(|windows| {
+        windows
+            .borrow()
+            .first()
+            .expect("MainApp window not registered")
+            .upgrade()
+            .expect("MainApp window was unexpectedly dropped")
+    })
+}
 
-        list_main_windows()
-            .into_iter()
-            .find(|ctx| ctx.window.id() == main_window_id)
-            .map(|ctx| {
-                ctx.window.set_visible(true);
-                ctx.window.set_focus();
-                true
-            })
-            .unwrap_or(false)
-    } else {
-        false
-    }
+/// Check if the MainApp window is currently visible.
+pub fn is_main_app_window_visible() -> bool {
+    get_main_app_window().window.is_visible()
+}
+
+/// Show and focus the MainApp window.
+pub fn show_main_app_window() {
+    let ctx = get_main_app_window();
+    ctx.window.set_visible(true);
+    ctx.window.set_focus();
 }
 
 /// Focus a specific window by its ID
@@ -275,22 +290,51 @@ pub async fn create_new_main_window_with_empty(
 
 pub fn update_last_focused_window(window_id: WindowId) {
     LAST_FOCUSED_WINDOW.with(|last| *last.borrow_mut() = Some(window_id));
-    if let Some(metrics) = find_window_metrics(window_id) {
-        let mut last_focused = LAST_FOCUSED_STATE.write();
-        last_focused.window_position = metrics.position;
-        last_focused.window_size = metrics.size;
-    }
+}
+
+// ============================================================================
+// WindowId → AppState mapping
+// ============================================================================
+
+/// Register AppState for a window.
+/// Called when a window is created to enable direct state access.
+pub fn register_window_state(window_id: WindowId, state: AppState) {
+    WINDOW_STATES.with(|states| {
+        states.borrow_mut().insert(window_id, state);
+    });
+}
+
+/// Unregister AppState when window closes.
+/// Called in use_drop to clean up the mapping.
+pub fn unregister_window_state(window_id: WindowId) {
+    WINDOW_STATES.with(|states| {
+        states.borrow_mut().remove(&window_id);
+    });
+}
+
+/// Get AppState by WindowId.
+///
+/// Windows are registered via `register_window_state()` during App component
+/// initialization (in `use_context_provider`), and automatically unregistered
+/// via `unregister_window_state()` when the window closes (in `use_drop`).
+///
+/// Returns None if the window is not registered in the WINDOW_STATES mapping.
+pub fn get_window_state(window_id: WindowId) -> Option<AppState> {
+    WINDOW_STATES.with(|states| states.borrow().get(&window_id).copied())
+}
+
+/// Get the last focused window's AppState.
+///
+/// This provides O(1) access to the last focused window's state via the
+/// WINDOW_STATES mapping, enabling direct reads from AppState Signals.
+///
+/// Returns None if no window is focused or if the window is not registered.
+pub fn get_last_focused_window_state() -> Option<AppState> {
+    get_last_focused_window().and_then(get_window_state)
 }
 
 pub(crate) fn get_last_focused_window() -> Option<WindowId> {
     LAST_FOCUSED_WINDOW.with(|last| *last.borrow())
-}
-
-fn find_window_metrics(window_id: WindowId) -> Option<WindowMetrics> {
-    list_main_windows()
-        .into_iter()
-        .find(|ctx| ctx.window.id() == window_id)
-        .map(|ctx| capture_window_metrics(&ctx.window))
 }
 
 fn list_main_window_positions() -> Vec<LogicalPosition<i32>> {

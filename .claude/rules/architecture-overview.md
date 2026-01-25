@@ -151,40 +151,42 @@ pub struct AppState {
    ├─> Config { theme.on_new_window: "last_focused" }
    └─> Config { directory.on_new_window: "last_focused" }
 
-2. Read in-memory LAST_FOCUSED_STATE
-   ├─> LAST_FOCUSED_STATE.theme (from last focused window)
-   └─> LAST_FOCUSED_STATE.directory (from last focused window)
+2. Access last focused window's AppState via WINDOW_STATES
+   ├─> get_last_focused_window_state() → Some(AppState)
+   ├─> Read current_theme from AppState Signal
+   └─> Read sidebar.root_directory from AppState Signal
 
 3. Apply new window behavior using window::settings helpers
-   ├─> Theme: "last_focused" → Use LAST_FOCUSED_STATE.theme
-   └─> Directory: "last_focused" → Use LAST_FOCUSED_STATE.directory
+   ├─> Theme: "last_focused" → Use AppState.current_theme
+   └─> Directory: "last_focused" → Use AppState.sidebar.root_directory
+   └─> Fallback: If no focused window, use PersistedState::load()
 
-4. Create AppState with computed values
-   └─> AppState { current_theme: <from LAST_FOCUSED_STATE>, sidebar.root_directory: <from LAST_FOCUSED_STATE> }
+4. Create AppState with computed values + register in WINDOW_STATES
+   └─> AppState { current_theme: <from last focused>, ... }
+   └─> register_window_state(window_id, app_state)
 ```
 
 ### Window Close Flow
 
 ```
-1. Read current AppState
+1. Unregister from WINDOW_STATES mapping
+   └─> unregister_window_state(window_id)
+
+2. Read current AppState
    ├─> current_theme: "dark"
    ├─> sidebar.root_directory: "/path/to/project"
    ├─> sidebar.is_visible: true
    ├─> sidebar.width: 320.0
-   └─> sidebar.hide_non_markdown: false
+   └─> sidebar.show_all_files: false
 
-2. Construct PersistedState
+3. Construct PersistedState
    └─> let mut persisted = PersistedState::from(&state);
        persisted.window_position = window_metrics.position;
        persisted.window_size = window_metrics.size;
 
-3. Save to state.json
+4. Save to state.json
    └─> persisted.save();
        → ~/Library/Application Support/arto/state.json
-
-4. Update in-memory LAST_FOCUSED_STATE global
-   └─> LAST_FOCUSED_STATE.write() updates window metrics
-       → For next "new window" (used immediately if creating windows)
 ```
 
 ## Decision Matrix
@@ -219,7 +221,12 @@ pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
         cfg.theme.on_startup,
         cfg.theme.on_new_window,
         || cfg.theme.default_theme,
-        || LAST_FOCUSED_STATE.read().theme,
+        || {
+            // Access last focused window's AppState directly
+            get_last_focused_window_state()
+                .map(|state| *state.current_theme.read())
+                .unwrap_or_else(|| PersistedState::load().theme)
+        },
     );
     ThemePreference { theme }
 }
@@ -228,9 +235,8 @@ pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
 **Priority:**
 1. Check config behavior setting (`on_startup` or `on_new_window`)
 2. If "default" → use `config.theme.default_theme`
-3. If "last_closed"/"last_focused" → use `LAST_FOCUSED_STATE.theme` directly
-
-**Note:** `LAST_FOCUSED_STATE.theme` is always valid (initialized from `state.json` or defaults to `Theme::default()`)
+3. If "last_closed"/"last_focused" → access last focused window's `AppState` directly
+4. Fallback → `PersistedState::load()` if no focused window exists
 
 ### Updating a value during runtime
 
@@ -238,87 +244,90 @@ pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
 // In component (e.g., ThemeSelector)
 let mut state = use_context::<AppState>();
 
-// User changes theme - update Signal directly
+// User changes theme - just update Signal directly
 state.current_theme.set(Theme::Dark);
 
-// Sync to LAST_FOCUSED_STATE via use_effect
-use_effect(move || {
-    let theme = state.current_theme();
-    LAST_FOCUSED_STATE.write().theme = theme;
-});
+// No synchronization needed!
+// WINDOW_STATES mapping holds reference to this AppState
+// New windows read directly from last focused window's AppState
 ```
 
 **Pattern for updating state:**
 1. Update `AppState.current_theme` Signal for current window UI
-2. Use `use_effect` to automatically sync to `LAST_FOCUSED_STATE` for next "new window"
+2. No sync code needed - `WINDOW_STATES` mapping provides direct access
 
-**Note:** AppState methods (like `set_root_directory`, `toggle_right_sidebar`) handle both updates internally for convenience
+**Why no sync needed:** The `WINDOW_STATES` mapping stores `AppState` (which contains `Signal<T>` fields). Signals are Arc-based, so the mapping holds references to the live reactive state. When creating a new window, we read directly from the last focused window's AppState Signals.
 
 ### Saving on window close
 
 ```rust
 // In App component use_drop()
+
+// Unregister from WINDOW_STATES mapping
+crate::window::unregister_window_state(window_id);
+
+// Create persisted state from current AppState
 let mut persisted = PersistedState::from(&state);
 
-// Capture window metrics
+// Capture window metrics from window handle
 let window_metrics = crate::window::metrics::capture_window_metrics(&window().window);
 persisted.window_position = window_metrics.position;
 persisted.window_size = window_metrics.size;
-
-// Update LAST_FOCUSED_STATE
-{
-    let mut last_focused = LAST_FOCUSED_STATE.write();
-    last_focused.window_position = window_metrics.position;
-    last_focused.window_size = window_metrics.size;
-}
 
 // Save to disk
 persisted.save();
 ```
 
 **What happens:**
-1. Collect values from current `AppState` via `From<&AppState>` trait
-2. Add window metrics (position, size)
-3. Update `LAST_FOCUSED_STATE` global
+1. Unregister from `WINDOW_STATES` mapping (no longer accessible for new windows)
+2. Collect values from current `AppState` via `From<&AppState>` trait
+3. Capture window metrics from window handle
 4. Save to `state.json` (blocking operation)
 
-## In-Memory Global: LAST_FOCUSED_STATE
+## WINDOW_STATES Mapping
 
-**Consolidated global for "last_focused" behavior:**
+**Direct access to window state for "last_focused" behavior:**
 
 ```rust
-// In state/persistence.rs
-pub static LAST_FOCUSED_STATE: LazyLock<RwLock<PersistedState>> =
-    LazyLock::new(|| RwLock::new(PersistedState::load()));
+// In window/main.rs
+thread_local! {
+    static WINDOW_STATES: RefCell<HashMap<WindowId, AppState>> = RefCell::new(HashMap::new());
+}
+
+pub fn register_window_state(window_id: WindowId, state: AppState) { ... }
+pub fn unregister_window_state(window_id: WindowId) { ... }
+pub fn get_window_state(window_id: WindowId) -> Option<AppState> { ... }
+pub fn get_last_focused_window_state() -> Option<AppState> { ... }
 ```
 
-**Purpose:** Remember the last focused window's state for "new window" behavior
+**Purpose:** Provide direct access to any window's `AppState` for "new window" behavior
 
 **Key characteristics:**
-- Single `PersistedState` instance holding ALL last-focused values
-- Updated by `AppState` methods when values change (theme, directory, sidebar, etc.)
-- Updated in `use_drop()` when window closes (window metrics)
-- Memory-only during app session, but initialized from disk (`state.json`)
+- Maps `WindowId` → `AppState` for all main windows
+- `AppState` is `Copy` (contains `Signal<T>` which are Arc pointers)
+- Reading from `AppState` Signals gives current live values
+- No synchronization code needed - direct access to reactive state
+- Window metrics obtained directly from window handle via `capture_window_metrics()`
 
-**Differences from state.json:**
-- **state.json** → Last **closed** window (persisted to disk on window close)
-- **LAST_FOCUSED_STATE** → Last **focused** window (updated in real-time, saved on close)
+**Differences from old LAST_FOCUSED_STATE:**
+- **Old design**: Sync state changes to global via `use_effect` hooks
+- **New design**: Direct access via `WINDOW_STATES` mapping - no sync needed
 
 **Why this design?**
-- Startup uses `state.json` (most recent state before app quit)
-- New window uses `LAST_FOCUSED_STATE` (current active window's state)
-- Consolidated design eliminates multiple per-field globals
+- Eliminates state duplication (no copy in separate global)
+- Removes synchronization overhead (no `use_effect` hooks)
+- Simplifies codebase (~100 lines of sync code removed)
+- Window metrics read directly from window handle when needed
 
 ## Summary
 
-| Aspect | Config | state.json | AppState | LAST_FOCUSED_STATE |
-|--------|--------|-----------|----------|-------------------|
-| **Type** | `Config` | `PersistedState` | `AppState` | `PersistedState` |
+| Aspect | Config | state.json | AppState | WINDOW_STATES |
+|--------|--------|-----------|----------|---------------|
+| **Type** | `Config` | `PersistedState` | `AppState` | `HashMap<WindowId, AppState>` |
 | **Storage** | config.json | state.json | Memory | Memory |
-| **Scope** | App-wide | App-wide | Per-window | App-wide |
+| **Scope** | App-wide | App-wide | Per-window | App-wide mapping |
 | **Lifetime** | Permanent | Permanent | Window | App session |
 | **Edited by** | User | App | App | App |
-| **Updated** | Manual/UI | On close | Real-time | Real-time |
-| **Used for** | Defaults | Last closed | Current | Last focused |
-| **Example field** | `default_theme` | `theme` | `current_theme` | `theme` |
-| **Example value** | `Theme::Auto` | `Theme::Dark` | `Theme::Dark` | `Theme::Dark` |
+| **Updated** | Manual/UI | On close | Real-time | Register/Unregister |
+| **Used for** | Defaults | Last closed | Current | Access any window's state |
+| **Access pattern** | `CONFIG.read()` | `PersistedState::load()` | `use_context()` | `get_window_state(id)` |

@@ -3,7 +3,6 @@ use dioxus::prelude::*;
 use dioxus_sdk_window::theme::use_system_theme;
 
 use crate::components::icon::{Icon, IconName};
-use crate::state::LAST_FOCUSED_STATE;
 use crate::theme::{DioxusTheme, Theme};
 
 #[component]
@@ -32,12 +31,6 @@ pub fn ThemeSelector(current_theme: Signal<Theme>) -> Element {
             ))
             .await;
         });
-    });
-
-    // Save last selected theme in memory (persisted on window close)
-    use_effect(move || {
-        let theme = current_theme();
-        LAST_FOCUSED_STATE.write().theme = theme;
     });
 
     // Expansion state for dropdown menu

@@ -1,10 +1,8 @@
 use dioxus::desktop::tao::dpi::{LogicalPosition, LogicalSize};
 use dioxus::prelude::*;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::LazyLock;
 
 use crate::components::right_sidebar::RightSidebarTab;
 use crate::config::DEFAULT_RIGHT_SIDEBAR_WIDTH;
@@ -83,7 +81,7 @@ impl From<&AppState> for PersistedState {
     fn from(state: &AppState) -> Self {
         let sidebar = state.sidebar.read();
         Self {
-            directory: state.sidebar.read().root_directory.clone(),
+            directory: sidebar.root_directory.clone(),
             theme: *state.current_theme.read(),
             sidebar_open: sidebar.open,
             sidebar_width: sidebar.width,
@@ -169,7 +167,3 @@ impl PersistedState {
         }
     }
 }
-
-/// Last focused window state (used for "last_focused" behavior when opening new windows)
-pub static LAST_FOCUSED_STATE: LazyLock<RwLock<PersistedState>> =
-    LazyLock::new(|| RwLock::new(PersistedState::load()));
