@@ -45,40 +45,47 @@ fn main() {
     let params = window::CreateMainWindowConfigParams::from_preferences(true);
 
     let config = window::create_main_window_config(&params)
-        .with_custom_event_handler(move |event, _target| match event {
-            Event::Opened { urls, .. } => {
-                for url in urls {
-                    if let Ok(path) = url.to_file_path() {
-                        let open_event = if path.is_dir() {
-                            components::main_app::OpenEvent::Directory(path)
-                        } else if path.is_file() {
-                            components::main_app::OpenEvent::File(path)
+        .with_custom_event_handler(move |event, _target| {
+            use components::main_app::OpenEvent;
+            match event {
+                Event::Opened { urls, .. } => {
+                    let paths = urls.into_iter().filter_map(|url| match url.to_file_path() {
+                        Ok(path) => Some(path),
+                        Err(_) => {
+                            tracing::info!(?url, "Non file/directory path URL is specified. Skip.");
+                            None
+                        }
+                    });
+                    for path in paths {
+                        if path.is_dir() {
+                            tx.try_send(OpenEvent::Directory(path))
+                                .expect("Failed to send directory open event");
                         } else {
-                            // Skip invalid paths
-                            continue;
+                            tx.try_send(OpenEvent::File(path))
+                                .expect("Failed to send file open event");
                         };
-                        tx.try_send(open_event).expect("Failed to send open event");
                     }
                 }
-            }
-            Event::Reopen { .. } => {
-                // Send reopen event through channel to handle it safely in component context
-                tx.try_send(components::main_app::OpenEvent::Reopen).ok();
-            }
-            Event::WindowEvent {
-                event: WindowEvent::Focused(true),
-                window_id,
-                ..
-            } => {
-                // Skip updating LAST_FOCUSED_WINDOW while a preview window exists
-                // to prevent focus from jumping to wrong window during drag.
-                // This blocks all focus updates during drag, not just when the
-                // preview window itself gains focus.
-                if !window::has_preview_window() {
-                    window::update_last_focused_window(*window_id);
+                Event::Reopen { .. } => {
+                    // Send reopen event through channel to handle it in component context
+                    tx.try_send(OpenEvent::Reopen)
+                        .expect("Failed to send reopen event");
                 }
+                Event::WindowEvent {
+                    event: WindowEvent::Focused(true),
+                    window_id,
+                    ..
+                } => {
+                    // Skip updating LAST_FOCUSED_WINDOW while a preview window exists
+                    // to prevent focus from jumping to wrong window during drag.
+                    // This blocks all focus updates during drag, not just when the
+                    // preview window itself gains focus.
+                    if !window::has_preview_window() {
+                        window::update_last_focused_window(*window_id);
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         })
         .with_menu(menu);
 
