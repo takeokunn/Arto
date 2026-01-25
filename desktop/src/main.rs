@@ -49,7 +49,7 @@ fn main() {
             use components::main_app::OpenEvent;
             match event {
                 Event::Opened { urls, .. } => {
-                    let paths = urls.into_iter().filter_map(|url| match url.to_file_path() {
+                    let paths = urls.iter().filter_map(|url| match url.to_file_path() {
                         Ok(path) => Some(path),
                         Err(_) => {
                             tracing::info!(?url, "Non file/directory path URL is specified. Skip.");

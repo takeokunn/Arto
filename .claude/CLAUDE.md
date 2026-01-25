@@ -79,13 +79,24 @@ window_manager::create_new_main_window(file, directory, show_welcome);
 - **First window**: Resolved synchronously in `main()` before Dioxus launch (eliminates flash)
 - **Additional windows**: Created asynchronously using helper functions
 - **Startup**: Uses `PersistedState` from `state.json` (last closed window)
-- **New Window**: Uses in-memory globals (last focused window)
+- **New Window**: Accesses last focused window's `AppState` directly via `WINDOW_STATES` mapping
 
 #### Window Lifecycle Hooks
 
 ```rust
-// In App component
+// In App component - register state on creation
+let mut state = use_context_provider(|| {
+    let mut app_state = AppState::new(theme);
+    // ... initialization ...
+    crate::window::register_window_state(window().id(), app_state);
+    app_state
+});
+
+// Cleanup on window close
 use_drop(move || {
+    // Unregister from WINDOW_STATES mapping
+    crate::window::unregister_window_state(window_id);
+
     // Save state on window close
     let mut persisted = PersistedState::from(&state);
 
@@ -93,13 +104,6 @@ use_drop(move || {
     let window_metrics = crate::window::metrics::capture_window_metrics(&window().window);
     persisted.window_position = window_metrics.position;
     persisted.window_size = window_metrics.size;
-
-    // Update last focused state
-    {
-        let mut last_focused = LAST_FOCUSED_STATE.write();
-        last_focused.window_position = window_metrics.position;
-        last_focused.window_size = window_metrics.size;
-    }
 
     // Save to disk (synchronous, blocking)
     persisted.save();
@@ -115,7 +119,7 @@ use_drop(move || {
 
 **Three-tier system (see TIPS.md and architecture-overview.md for details):**
 
-1. **Global Statics** - Shared across windows (CONFIG, LAST_FOCUSED_STATE, broadcast channels)
+1. **Global Statics** - Shared across windows (CONFIG, WINDOW_STATES mapping, broadcast channels)
 2. **Context (AppState)** - Per-window state (tabs, active tab, zoom)
 3. **Local (use_signal)** - Component-only UI state
 
@@ -124,8 +128,8 @@ use_drop(move || {
 2. Fallback to `Config` defaults
 
 **New window priority:**
-1. In-memory `LAST_FOCUSED_STATE` (last focused window)
-2. Fallback to `Config` defaults
+1. Last focused window's `AppState` via `WINDOW_STATES` mapping
+2. Fallback to `PersistedState::load()` then `Config` defaults
 
 ### Configuration System
 

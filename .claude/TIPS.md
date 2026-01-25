@@ -281,7 +281,7 @@ rsx! {
 **1. Global Statics** (app-wide, shared across windows):
 ```rust
 pub static CONFIG: LazyLock<RwLock<Config>> = ...;
-pub static LAST_FOCUSED_STATE: LazyLock<RwLock<PersistedState>> = ...;
+// WINDOW_STATES mapping in window/main.rs (thread_local)
 pub static TRANSFER_TAB_TO_WINDOW: LazyLock<broadcast::Sender<...>> = ...;
 ```
 
@@ -289,7 +289,11 @@ pub static TRANSFER_TAB_TO_WINDOW: LazyLock<broadcast::Sender<...>> = ...;
 ```rust
 #[component]
 fn App() -> Element {
-    let state = use_context_provider(|| AppState::new());
+    let state = use_context_provider(|| {
+        let app_state = AppState::new(theme);
+        crate::window::register_window_state(window().id(), app_state);
+        app_state
+    });
     // Children access via use_context::<AppState>()
 }
 ```
@@ -301,25 +305,27 @@ let mut input_value = use_signal(String::new);
 ```
 
 **Decision tree:**
-- Shared across windows? → Global static
+- Shared across windows? → Global static or WINDOW_STATES mapping
 - Shared within window? → Context
 - Component-only? → use_signal
 
 ### Separate Last Closed vs Last Focused
 
-**Use different state stores for different behaviors:**
+**Use different access patterns for different behaviors:**
 
 ```rust
 // Last CLOSED window (persisted to disk) - for startup
 let persisted = PersistedState::load();  // From state.json
 
-// Last FOCUSED window (in-memory) - for new window
-let theme = *LAST_SELECTED_THEME.lock().unwrap();
+// Last FOCUSED window (direct access) - for new window
+let theme = get_last_focused_window_state()
+    .map(|state| *state.current_theme.read())
+    .unwrap_or_else(|| PersistedState::load().theme);
 ```
 
 **Why:**
-- Startup: restore state from when app last quit
-- New window: copy state from currently active window
+- Startup: restore state from when app last quit (state.json)
+- New window: access last focused window's AppState directly via WINDOW_STATES mapping
 
 ---
 
@@ -600,7 +606,7 @@ Adding new setting?
 2. Last opened file in current window → `AppState` (not persisted)
 3. Theme of the last closed window → `PersistedState` (state.json)
 4. Currently expanded directories in sidebar → `AppState` (not persisted)
-5. Last focused directory (for new window) → In-memory global (`LAST_FOCUSED_DIRECTORY`)
+5. Last focused directory (for new window) → Access via `WINDOW_STATES` mapping
 
 **Quiz: Should I use #[serde(default)]?**
 
@@ -811,23 +817,28 @@ use_future(move || async move {
 });
 ```
 
-### Window Initialization Anti-Pattern
+### Window State Registration Pattern
 
-**Don't update LAST_FOCUSED_STATE during window creation:**
+**Register AppState in WINDOW_STATES during window creation:**
 ```rust
-// ❌ Bad - Setting "last focused" before window is even focused
-let theme_value = get_theme_value(is_first_window);
-LAST_FOCUSED_STATE.write().theme = theme_value.theme;  // ← Wrong timing
+// ✅ Good - Register state during context provider setup
+let mut state = use_context_provider(|| {
+    let app_state = AppState::new(theme);
+    crate::window::register_window_state(window().id(), app_state);
+    app_state
+});
 
-// ✅ Good - Pass theme directly to where it's needed
-.with_custom_index(build_custom_index(theme_value.theme))
+// ✅ Good - Unregister on window close
+use_drop(move || {
+    crate::window::unregister_window_state(window_id);
+    // ... save persisted state ...
+});
 ```
 
-**Why:** `LAST_FOCUSED_STATE` should only be updated when:
-1. User changes settings (real-time update)
-2. Window closes (`use_drop()` saves final state)
-
-Not during window creation, which is before any user interaction.
+**Why this pattern:**
+1. `WINDOW_STATES` provides direct access to any window's live AppState
+2. No synchronization code needed - Signals are Arc-based, changes are visible immediately
+3. New windows can read from last focused window's AppState directly
 
 ### Module Placement by Usage Scope
 

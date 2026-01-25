@@ -4,20 +4,22 @@ use dioxus::desktop::{window, Config, DesktopService, WeakDesktopContext, Window
 use dioxus::prelude::*;
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
+
+use crate::state::AppState;
 
 use crate::assets::MAIN_STYLE;
 use crate::components::app::{App, AppProps};
 use crate::config::{WindowPositionOffset, CONFIG};
-use crate::state::{Tab, LAST_FOCUSED_STATE};
+use crate::state::Tab;
 use crate::theme::Theme;
 use crate::utils::screen::get_current_display_bounds;
 
 use super::index::build_custom_index;
 use super::metrics::capture_window_metrics;
 use super::settings;
-use super::types::WindowMetrics;
 
 const MAX_POSITION_SHIFT_ATTEMPTS: usize = 20;
 
@@ -90,10 +92,11 @@ impl Default for CreateMainWindowConfigParams {
 thread_local! {
     static MAIN_WINDOWS: RefCell<Vec<WeakDesktopContext>> = const { RefCell::new(Vec::new()) };
     static LAST_FOCUSED_WINDOW: RefCell<Option<WindowId>> = const { RefCell::new(None) };
+    static WINDOW_STATES: RefCell<HashMap<WindowId, AppState>> = RefCell::new(HashMap::new());
 }
 
 /// List all active (upgraded) main window contexts
-fn list_main_windows() -> Vec<Rc<DesktopService>> {
+pub fn list_main_windows() -> Vec<Rc<DesktopService>> {
     MAIN_WINDOWS.with(|windows| {
         windows
             .borrow()
@@ -287,22 +290,42 @@ pub async fn create_new_main_window_with_empty(
 
 pub fn update_last_focused_window(window_id: WindowId) {
     LAST_FOCUSED_WINDOW.with(|last| *last.borrow_mut() = Some(window_id));
-    if let Some(metrics) = find_window_metrics(window_id) {
-        let mut last_focused = LAST_FOCUSED_STATE.write();
-        last_focused.window_position = metrics.position;
-        last_focused.window_size = metrics.size;
-    }
+}
+
+// ============================================================================
+// WindowId → AppState mapping
+// ============================================================================
+
+/// Register AppState for a window.
+/// Called when a window is created to enable direct state access.
+pub fn register_window_state(window_id: WindowId, state: AppState) {
+    WINDOW_STATES.with(|states| {
+        states.borrow_mut().insert(window_id, state);
+    });
+}
+
+/// Unregister AppState when window closes.
+/// Called in use_drop to clean up the mapping.
+pub fn unregister_window_state(window_id: WindowId) {
+    WINDOW_STATES.with(|states| {
+        states.borrow_mut().remove(&window_id);
+    });
+}
+
+/// Get AppState by WindowId.
+/// Returns None if the window is not registered.
+pub fn get_window_state(window_id: WindowId) -> Option<AppState> {
+    WINDOW_STATES.with(|states| states.borrow().get(&window_id).copied())
+}
+
+/// Get the last focused window's AppState.
+/// Returns None if no window is focused or if the window is not registered.
+pub fn get_last_focused_window_state() -> Option<AppState> {
+    get_last_focused_window().and_then(get_window_state)
 }
 
 pub(crate) fn get_last_focused_window() -> Option<WindowId> {
     LAST_FOCUSED_WINDOW.with(|last| *last.borrow())
-}
-
-fn find_window_metrics(window_id: WindowId) -> Option<WindowMetrics> {
-    list_main_windows()
-        .into_iter()
-        .find(|ctx| ctx.window.id() == window_id)
-        .map(|ctx| capture_window_metrics(&ctx.window))
 }
 
 fn list_main_window_positions() -> Vec<LogicalPosition<i32>> {

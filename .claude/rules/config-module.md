@@ -21,8 +21,9 @@ desktop/src/
 │   ├── app_state/           # Per-window state types
 │   │   ├── sidebar.rs
 │   │   └── tabs.rs
-│   └── persistence.rs       # PersistedState + LAST_FOCUSED_STATE global
+│   └── persistence.rs       # PersistedState (disk persistence)
 └── window/
+    ├── main.rs              # WINDOW_STATES mapping (WindowId → AppState)
     └── settings.rs          # Startup/new window preference resolution
 ```
 
@@ -95,7 +96,12 @@ pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
         cfg.theme.on_startup,
         cfg.theme.on_new_window,
         || cfg.theme.default_theme,
-        || LAST_FOCUSED_STATE.read().theme,
+        || {
+            // Access last focused window's AppState directly
+            get_last_focused_window_state()
+                .map(|state| *state.current_theme.read())
+                .unwrap_or_else(|| PersistedState::load().theme)
+        },
     );
     ThemePreference { theme }
 }
@@ -116,8 +122,8 @@ let sidebar = window::settings::get_sidebar_preference(false);
 ```
 
 **Key differences:**
-- **Startup** (`is_first_window: true`): Uses `LAST_FOCUSED_STATE` (saved from last closed window's state.json)
-- **New Window** (`is_first_window: false`): Uses `LAST_FOCUSED_STATE` (updated in real-time by last focused window)
+- **Startup** (`is_first_window: true`): Uses `PersistedState::load()` (from state.json)
+- **New Window** (`is_first_window: false`): Accesses last focused window's `AppState` directly via `WINDOW_STATES` mapping, with fallback to `PersistedState::load()`
 
 ## Avoid Duplicate Enums
 

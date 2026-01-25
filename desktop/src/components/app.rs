@@ -7,7 +7,6 @@ use dioxus::prelude::*;
 use dioxus_core::use_drop;
 use mouse_position::mouse_position::Mouse;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use super::content::{
     close_context_menu, use_search_handler, Content, ContentContextMenu, CONTENT_CONTEXT_MENU,
@@ -24,38 +23,11 @@ use crate::events::{
     ActiveDragUpdate, ACTIVE_DRAG_UPDATE, OPEN_DIRECTORY_IN_WINDOW, OPEN_FILE_IN_WINDOW,
 };
 use crate::menu;
-use crate::state::{AppState, PersistedState, Tab, LAST_FOCUSED_STATE};
+use crate::state::{AppState, PersistedState, Tab};
 use crate::theme::Theme;
-
-const WINDOW_METRICS_DEBOUNCE_MS: u64 = 200;
 
 /// Left mouse button ID for DeviceEvent::Button (platform-dependent raw value)
 const MOUSE_BUTTON_LEFT: u32 = 0;
-
-struct DebouncedMetricsUpdater {
-    pending: Signal<(LogicalPosition<i32>, LogicalSize<u32>)>,
-    token: Signal<u64>,
-}
-
-impl DebouncedMetricsUpdater {
-    fn schedule(&mut self, position: LogicalPosition<i32>, size: LogicalSize<u32>) {
-        self.pending.set((position, size));
-        let token = self.token.read().wrapping_add(1);
-        self.token.set(token);
-        let pending = self.pending;
-        let token_signal = self.token;
-        spawn(async move {
-            tokio::time::sleep(Duration::from_millis(WINDOW_METRICS_DEBOUNCE_MS)).await;
-            if *token_signal.read() != token {
-                return;
-            }
-            let (position, size) = *pending.read();
-            let mut last_focused = LAST_FOCUSED_STATE.write();
-            last_focused.window_position = position.into();
-            last_focused.window_size = size.into();
-        });
-    }
-}
 
 #[component]
 pub fn App(
@@ -70,53 +42,37 @@ pub fn App(
 ) -> Element {
     // Initialize application state with the provided tab
     let mut state = use_context_provider(|| {
-        let mut app_state = AppState::default();
+        let mut app_state = AppState::new(theme);
 
         // Initialize with provided tab (preserves history)
         app_state.tabs.write()[0] = tab;
-
-        // Set initial theme
-        LAST_FOCUSED_STATE.write().theme = theme;
 
         // Apply initial sidebar settings from params (including directory)
         {
             let mut sidebar = app_state.sidebar.write();
             sidebar.root_directory = Some(directory.clone());
-            sidebar.push_to_history(directory.clone());
+            sidebar.push_to_history(directory);
             sidebar.open = sidebar_open;
             sidebar.width = sidebar_width;
             sidebar.show_all_files = sidebar_show_all_files;
-            // Update last focused state for "Last Focused" behavior
-            let mut state = LAST_FOCUSED_STATE.write();
-            state.directory = Some(directory);
-            state.sidebar_open = sidebar_open;
-            state.sidebar_width = sidebar_width;
-            state.sidebar_show_all_files = sidebar_show_all_files;
         }
 
         // Apply initial right sidebar settings from params
         {
             app_state.right_sidebar_open.set(toc_open);
             app_state.right_sidebar_width.set(toc_width);
-            // Update last focused state for "Last Focused" behavior
-            let mut state = LAST_FOCUSED_STATE.write();
-            state.right_sidebar_open = toc_open;
-            state.right_sidebar_width = toc_width;
         }
 
         let metrics = crate::window::metrics::capture_window_metrics(&window().window);
         *app_state.position.write() = LogicalPosition::new(metrics.position.x, metrics.position.y);
         *app_state.size.write() = LogicalSize::new(metrics.size.width, metrics.size.height);
+
+        // Register this window's state for cross-window access
+        crate::window::register_window_state(window().id(), app_state);
+
         app_state
     });
 
-    let mut debounced_metrics = {
-        let position = *state.position.read();
-        let size = *state.size.read();
-        let pending = use_signal(|| (position, size));
-        let token = use_signal(|| 0_u64);
-        DebouncedMetricsUpdater { pending, token }
-    };
     // Track drag-and-drop hover state
     let mut is_dragging = use_signal(|| false);
 
@@ -161,7 +117,6 @@ pub fn App(
                     state,
                     None,
                     Some(size.to_logical::<u32>(window.scale_factor())),
-                    &mut debounced_metrics,
                 );
             }
         }
@@ -176,7 +131,6 @@ pub fn App(
                     state,
                     Some(position.to_logical::<i32>(window.scale_factor())),
                     None,
-                    &mut debounced_metrics,
                 );
             }
         }
@@ -293,18 +247,14 @@ pub fn App(
             }
         }
 
-        // Save last used state from this window
-        // Read directly from state signals instead of global statics
-        // to ensure we get the current window's values, not the global last-modified values
+        // Unregister this window's state from the global mapping
+        crate::window::unregister_window_state(window_id);
+
+        // Save last used state from this window to disk for next app launch
         let mut persisted = PersistedState::from(&state);
         let window_metrics = crate::window::metrics::capture_window_metrics(&window().window);
         persisted.window_position = window_metrics.position;
         persisted.window_size = window_metrics.size;
-        {
-            let mut last_focused = LAST_FOCUSED_STATE.write();
-            last_focused.window_position = window_metrics.position;
-            last_focused.window_size = window_metrics.size;
-        }
         persisted.save();
 
         // Close child windows
@@ -413,18 +363,12 @@ fn sync_window_metrics(
     mut state: AppState,
     position: Option<LogicalPosition<i32>>,
     size: Option<LogicalSize<u32>>,
-    debounced_metrics: &mut DebouncedMetricsUpdater,
 ) {
     if let Some(position) = position {
         *state.position.write() = position;
     }
     if let Some(size) = size {
         *state.size.write() = size;
-    }
-    if position.is_some() || size.is_some() {
-        let latest_position = *state.position.read();
-        let latest_size = *state.size.read();
-        debounced_metrics.schedule(latest_position, latest_size);
     }
 }
 
