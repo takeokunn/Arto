@@ -59,14 +59,17 @@ fn handle_open_event(event: OpenEvent) {
             });
         }
         OpenEvent::Reopen => {
-            // Try to focus existing window first, create new if none exist
-            if !window_manager::focus_last_focused_main_window() {
+            if window_manager::is_main_app_window_visible() {
+                // MainApp is visible, create a new window
                 spawn(async move {
                     window_manager::create_new_main_window_with_empty(
                         CreateMainWindowConfigParams::default(),
                     )
                     .await;
                 });
+            } else {
+                // MainApp is hidden, show it
+                window_manager::show_main_app_window();
             }
         }
     }

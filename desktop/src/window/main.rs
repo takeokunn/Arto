@@ -14,7 +14,6 @@ use crate::state::{Tab, LAST_FOCUSED_STATE};
 use crate::theme::Theme;
 use crate::utils::screen::get_current_display_bounds;
 
-use super::child;
 use super::index::build_custom_index;
 use super::metrics::capture_window_metrics;
 use super::settings;
@@ -135,23 +134,36 @@ pub fn has_any_main_windows() -> bool {
     !list_visible_main_windows().is_empty()
 }
 
-pub fn focus_last_focused_main_window() -> bool {
-    if let Some(window_id) = get_last_focused_window() {
-        // Resolve to parent window if the last focused was a child window
-        let main_window_id = child::resolve_to_parent_window(window_id);
+/// Get the MainApp window (the first window registered).
+///
+/// MainApp is the first window launched from main.rs with WindowCloseBehaviour::WindowHides.
+/// It remains in memory even when hidden, unlike additional windows which are destroyed on close.
+///
+/// # Panics
+///
+/// Panics if MainApp is not registered or was unexpectedly dropped.
+/// This should never happen in normal operation.
+fn get_main_app_window() -> Rc<DesktopService> {
+    MAIN_WINDOWS.with(|windows| {
+        windows
+            .borrow()
+            .first()
+            .expect("MainApp window not registered")
+            .upgrade()
+            .expect("MainApp window was unexpectedly dropped")
+    })
+}
 
-        list_main_windows()
-            .into_iter()
-            .find(|ctx| ctx.window.id() == main_window_id)
-            .map(|ctx| {
-                ctx.window.set_visible(true);
-                ctx.window.set_focus();
-                true
-            })
-            .unwrap_or(false)
-    } else {
-        false
-    }
+/// Check if the MainApp window is currently visible.
+pub fn is_main_app_window_visible() -> bool {
+    get_main_app_window().window.is_visible()
+}
+
+/// Show and focus the MainApp window.
+pub fn show_main_app_window() {
+    let ctx = get_main_app_window();
+    ctx.window.set_visible(true);
+    ctx.window.set_focus();
 }
 
 /// Focus a specific window by its ID
