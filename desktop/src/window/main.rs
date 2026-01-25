@@ -313,12 +313,21 @@ pub fn unregister_window_state(window_id: WindowId) {
 }
 
 /// Get AppState by WindowId.
-/// Returns None if the window is not registered.
+///
+/// Windows are registered via `register_window_state()` during App component
+/// initialization (in `use_context_provider`), and automatically unregistered
+/// via `unregister_window_state()` when the window closes (in `use_drop`).
+///
+/// Returns None if the window is not registered in the WINDOW_STATES mapping.
 pub fn get_window_state(window_id: WindowId) -> Option<AppState> {
     WINDOW_STATES.with(|states| states.borrow().get(&window_id).copied())
 }
 
 /// Get the last focused window's AppState.
+///
+/// This provides O(1) access to the last focused window's state via the
+/// WINDOW_STATES mapping, enabling direct reads from AppState Signals.
+///
 /// Returns None if no window is focused or if the window is not registered.
 pub fn get_last_focused_window_state() -> Option<AppState> {
     get_last_focused_window().and_then(get_window_state)

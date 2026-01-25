@@ -10,10 +10,7 @@ use crate::config::{
 use crate::state::{PersistedState, Position, Size};
 use crate::theme::Theme;
 use crate::utils::screen::{get_current_display_bounds, get_cursor_display, get_primary_display};
-use crate::window::main::{
-    get_last_focused_window, get_last_focused_window_state, list_main_windows,
-};
-use crate::window::metrics::capture_window_metrics;
+use crate::window::main::get_last_focused_window_state;
 
 const MIN_WINDOW_DIMENSION: f64 = 100.0;
 
@@ -169,17 +166,13 @@ fn window_position_from_state(position: Position) -> WindowPosition {
     }
 }
 
-/// Get window metrics from last focused window, or fallback to persisted state
+/// Get window metrics from last focused window's AppState.
+/// Uses WINDOW_STATES mapping for O(1) access instead of iterating windows.
 fn get_last_focused_metrics() -> Option<(Position, Size)> {
-    // Try to get from last focused window handle directly
-    get_last_focused_window().and_then(|wid| {
-        list_main_windows()
-            .into_iter()
-            .find(|ctx| ctx.window.id() == wid)
-            .map(|ctx| {
-                let metrics = capture_window_metrics(&ctx.window);
-                (metrics.position, metrics.size)
-            })
+    get_last_focused_window_state().map(|state| {
+        let position = (*state.position.read()).into();
+        let size = (*state.size.read()).into();
+        (position, size)
     })
 }
 
