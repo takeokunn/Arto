@@ -36,7 +36,7 @@ pub fn FileViewer(file: PathBuf) -> Element {
 
     // Setup component hooks
     use_file_loader(file.clone(), html, reload_trigger, state);
-    use_file_watcher(file.clone(), reload_trigger);
+    use_file_watcher(file.clone(), reload_trigger, state);
     use_link_click_handler(file.clone(), state);
     use_mermaid_window_handler();
     use_context_menu_handler(file.clone(), base_dir);
@@ -229,7 +229,7 @@ async fn reapply_search() {
 }
 
 /// Hook to watch file for changes and trigger reload
-fn use_file_watcher(file: PathBuf, reload_trigger: Signal<usize>) {
+fn use_file_watcher(file: PathBuf, reload_trigger: Signal<usize>, mut state: AppState) {
     use_effect(use_reactive!(|file| {
         let mut reload_trigger = reload_trigger;
         let file = file.clone();
@@ -250,6 +250,10 @@ fn use_file_watcher(file: PathBuf, reload_trigger: Signal<usize>) {
 
             while watcher.recv().await.is_some() {
                 tracing::info!("File change detected, reloading: {:?}", file_path);
+                // Save current scroll position before reloading so it can be restored
+                // after the content re-renders (reuses the back/forward restoration mechanism)
+                let scroll = *state.current_scroll_position.read();
+                state.pending_scroll_position.set(Some(scroll));
                 reload_trigger.set(reload_trigger() + 1);
             }
 
