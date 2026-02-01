@@ -23,9 +23,29 @@ use tokio::sync::mpsc::channel;
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-/// Arto - A markdown viewer
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    compile_time::datetime_str!(),
+    ")",
+);
+
+/// Arto — the Art of Reading Markdown
 #[derive(Parser, Debug)]
-#[command(version, about)]
+#[command(
+    version = VERSION,
+    about,
+    long_about = "Arto — the Art of Reading Markdown\n\n\
+        A local app that faithfully recreates GitHub-style Markdown rendering\n\
+        for a beautiful reading experience.\n\n\
+        Arto runs as a single instance — if already running, paths are sent\n\
+        to the existing process instead of launching a new one.",
+    after_long_help = "Examples:\n\
+        \x20 arto                     Launch Arto (shows welcome screen)\n\
+        \x20 arto README.md           Open a specific file\n\
+        \x20 arto docs/               Open a directory in the file explorer\n\
+        \x20 arto file1.md file2.md   Open multiple files in tabs"
+)]
 struct Cli {
     /// Files or directories to open
     #[arg()]
