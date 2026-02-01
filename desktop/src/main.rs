@@ -6,6 +6,7 @@ mod config;
 mod drag;
 mod events;
 mod history;
+mod ipc;
 mod markdown;
 mod menu;
 mod pinned_search;
@@ -15,10 +16,41 @@ mod utils;
 mod watcher;
 mod window;
 
+use clap::Parser;
 use dioxus::desktop::tao::event::{Event, WindowEvent};
+use std::path::PathBuf;
 use tokio::sync::mpsc::channel;
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::prelude::*;
+
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    compile_time::datetime_str!(),
+    ")",
+);
+
+/// Arto — the Art of Reading Markdown
+#[derive(Parser, Debug)]
+#[command(
+    version = VERSION,
+    about,
+    long_about = "Arto — the Art of Reading Markdown\n\n\
+        A local app that faithfully recreates GitHub-style Markdown rendering\n\
+        for a beautiful reading experience.\n\n\
+        Arto runs as a single instance — if already running, paths are sent\n\
+        to the existing process instead of launching a new one.",
+    after_long_help = "Examples:\n\
+        \x20 arto                     Launch Arto (shows welcome screen)\n\
+        \x20 arto README.md           Open a specific file\n\
+        \x20 arto docs/               Open a directory in the file explorer\n\
+        \x20 arto file1.md file2.md   Open multiple files in tabs"
+)]
+struct Cli {
+    /// Files or directories to open
+    #[arg()]
+    paths: Vec<PathBuf>,
+}
 
 const DEFAULT_LOGLEVEL: &str = if cfg!(debug_assertions) {
     "debug"
@@ -27,6 +59,15 @@ const DEFAULT_LOGLEVEL: &str = if cfg!(debug_assertions) {
 };
 
 fn main() {
+    // Parse CLI arguments first (before any other initialization)
+    let cli = Cli::parse();
+
+    // Try to send paths to existing instance via IPC
+    // If successful, exit immediately without initializing anything else
+    if let ipc::SendResult::Sent = ipc::try_send_to_existing_instance(&cli.paths) {
+        std::process::exit(0);
+    }
+
     // Load environment variables from .env file
     if let Ok(dotenv) = dotenvy::dotenv() {
         println!("Loaded .env file from: {}", dotenv.display());
@@ -42,6 +83,21 @@ fn main() {
         .lock()
         .expect("Failed to lock OPEN_EVENT_RECEIVER")
         .replace(rx);
+
+    // Start IPC server to accept connections from future instances
+    ipc::start_ipc_server(tx.clone());
+
+    // Send CLI paths as OpenEvents (before Dioxus launches)
+    for path in cli.paths {
+        let event = match ipc::validate_path(&path) {
+            Some(event) => event,
+            None => continue, // Invalid path, already logged by validate_path
+        };
+        tracing::debug!(?event, "Sending CLI path as open event");
+        if let Err(e) = tx.try_send(event) {
+            tracing::warn!(?e, "Failed to send CLI path event");
+        }
+    }
 
     let menu = menu::build_menu();
 
@@ -98,6 +154,9 @@ fn main() {
     dioxus::LaunchBuilder::desktop()
         .with_cfg(config)
         .launch(components::main_app::MainApp);
+
+    // Clean up IPC socket on normal exit
+    ipc::cleanup_socket();
 }
 
 fn init_tracing() {
