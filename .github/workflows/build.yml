@@ -128,6 +128,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: nixbuild/nix-quick-install-action@v34
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-macos: 5G
+          purge: true
+          purge-prefixes: cache-nix-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: 604800
+          purge-primary-key: never
       - run: nix build
     timeout-minutes: 30
 
