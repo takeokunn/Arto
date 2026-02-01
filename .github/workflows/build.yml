@@ -28,9 +28,14 @@ jobs:
         with:
           cache: "pnpm"
           cache-dependency-path: ./renderer/pnpm-lock.yaml
+      - name: Determine dx version from Cargo.lock
+        id: dx-version
+        run: |
+          version=$(grep -A1 'name = "dioxus"$' desktop/Cargo.lock | grep version | head -1 | perl -pe 's/.*"(.+?)".*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: taiki-e/install-action@v2
         with:
-          tool: dioxus-cli@0.7
+          tool: dioxus-cli@${{ steps.dx-version.outputs.version }}
       - run: just check
       - run: just fmt && git diff --exit-code
     timeout-minutes: 15
@@ -52,9 +57,14 @@ jobs:
         with:
           cache: "pnpm"
           cache-dependency-path: ./renderer/pnpm-lock.yaml
+      - name: Determine dx version from Cargo.lock
+        id: dx-version
+        run: |
+          version=$(grep -A1 'name = "dioxus"$' desktop/Cargo.lock | grep version | head -1 | perl -pe 's/.*"(.+?)".*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: taiki-e/install-action@v2
         with:
-          tool: dioxus-cli@0.7
+          tool: dioxus-cli@${{ steps.dx-version.outputs.version }}
       # Retry up to 3 times due to flaky NSScreen API tests in headless environment
       - name: Run tests
         run: |
@@ -90,9 +100,14 @@ jobs:
         with:
           cache: "pnpm"
           cache-dependency-path: ./renderer/pnpm-lock.yaml
+      - name: Determine dx version from Cargo.lock
+        id: dx-version
+        run: |
+          version=$(grep -A1 'name = "dioxus"$' desktop/Cargo.lock | grep version | head -1 | perl -pe 's/.*"(.+?)".*/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: taiki-e/install-action@v2
         with:
-          tool: dioxus-cli@0.7
+          tool: dioxus-cli@${{ steps.dx-version.outputs.version }}
       - name: Apply version
         if: ${{ github.event_name == 'release' }}
         run: |
