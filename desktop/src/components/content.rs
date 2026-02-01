@@ -31,8 +31,10 @@ pub fn Content() -> Element {
     let state = use_context::<AppState>();
     let zoom_level = state.zoom_level;
 
-    let current_tab = state.current_tab();
-    let content = current_tab.map(|tab| tab.content);
+    // Memoize the current tab's content to prevent re-rendering when non-active tabs change.
+    // Without this, any write to state.tabs (even for other tabs) would trigger a re-render
+    // of Content and its children, potentially disrupting scroll position.
+    let content = use_memo(move || state.current_tab().map(|tab| tab.content));
 
     // Use CSS zoom property for vector-based scaling (not transform: scale)
     // This ensures fonts and images remain sharp at any zoom level
@@ -46,7 +48,7 @@ pub fn Content() -> Element {
             class: "content",
             style: "{zoom_style}",
 
-            match content {
+            match content() {
                 Some(TabContent::File(file)) => {
                     rsx! { FileViewer { file } }
                 },
