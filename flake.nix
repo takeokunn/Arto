@@ -160,6 +160,10 @@
 
                 mkdir -p $out/Applications
                 cp -r "$app_path" $out/Applications/
+
+                # Create symlink for CLI usage (enables `arto` command in PATH)
+                mkdir -p $out/bin
+                ln -s "$out/Applications/${appBundleName}/Contents/MacOS/${appExecutableName}" "$out/bin/${appExecutableName}"
               '';
             }
           );
