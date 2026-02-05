@@ -27,10 +27,12 @@
           inherit (pkgs) lib;
           craneLib = crane.mkLib pkgs;
 
-          # Package metadata - single source of truth for version and paths
+          # Package metadata - read from Cargo.toml as single source of truth
+          # CI sets the actual version via sed before building (see .github/workflows/build.yml)
+          cargoToml = builtins.fromTOML (builtins.readFile ./desktop/Cargo.toml);
           packageMeta = {
-            pname = "arto";
-            version = "0.0.0";
+            pname = cargoToml.package.name;
+            version = cargoToml.package.version;
           };
 
           # Platform detection
