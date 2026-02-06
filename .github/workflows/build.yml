@@ -145,8 +145,10 @@ jobs:
       - name: Apply version
         if: ${{ github.event_name == 'release' }}
         run: |
-          sed -i '' "s/^version = \"0.0.0\"/version = \"${{ github.event.release.tag_name }}\"/" desktop/Cargo.toml
-          sed -i '' "s/^version = \"v\(.*\)\"/version = \"\1\"/" desktop/Cargo.toml
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          sed -i '' "s/^version = \"0.0.0\"/version = \"${VERSION}\"/" desktop/Cargo.toml
+          sed -i '' "/^name = \"arto\"$/{n;s/^version = \"0.0.0\"/version = \"${VERSION}\"/;}" desktop/Cargo.lock
       - run: nix build
     timeout-minutes: 30
 

@@ -114,6 +114,10 @@
               inherit (packageMeta) pname version;
               inherit cargoArtifacts;
 
+              # Disable: some tests depend on macOS display APIs (NSScreen) which
+              # are unavailable in the Nix sandbox. Run tests via `cargo test` instead.
+              doCheck = false;
+
               nativeBuildInputs =
                 # Wrappers must come first to override system commands in PATH
                 lib.optionals isDarwin [
