@@ -1,6 +1,7 @@
 import mermaid from "mermaid";
 import type { Theme } from "./theme";
 import { buildMermaidThemeConfig } from "./mermaid-theme";
+import { fixTextContrast } from "./mermaid-contrast";
 import {
   createBlobPromise,
   createCanvasFromSvg,
@@ -146,6 +147,9 @@ class MermaidWindowController {
         // diagram to appear extremely small after zoom scaling.
         const svgElement = this.#diagramContainer.querySelector("svg");
         if (svgElement) {
+          // Fix text contrast for nodes with custom fill colors
+          fixTextContrast(svgElement as SVGSVGElement);
+
           const dims = this.#getViewerDimensions(svgElement);
           svgElement.setAttribute("width", String(dims.width));
           svgElement.setAttribute("height", String(dims.height));

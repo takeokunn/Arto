@@ -1,6 +1,7 @@
 import mermaid from "mermaid";
 import type { Theme } from "./theme";
 import { buildMermaidThemeConfig } from "./mermaid-theme";
+import { fixTextContrast } from "./mermaid-contrast";
 import { openMermaidWindow } from "./mermaid-window-controller";
 
 export function init(): void {
@@ -77,6 +78,8 @@ async function renderDiagram(element: HTMLElement): Promise<void> {
     // Make diagram clickable to open viewer
     const svgElement = element.querySelector("svg");
     if (svgElement) {
+      // Fix text contrast for nodes with custom fill colors
+      fixTextContrast(svgElement as SVGSVGElement);
       svgElement.style.cursor = "pointer";
       svgElement.style.transition = "opacity 0.2s ease";
 

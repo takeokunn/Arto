@@ -43,7 +43,7 @@ function iconSpritePlugin(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: "/assets/dist/",
   root: ".",
   plugins: [iconSpritePlugin()],
@@ -51,7 +51,9 @@ export default defineConfig({
     outDir:
       process.env.VITE_OUT_DIR ||
       path.resolve(__dirname, "../desktop/assets/dist"),
-    emptyOutDir: true,
+    // In dev mode, keep existing files for incremental updates
+    // In production, clean the directory to avoid shipping stale artifacts
+    emptyOutDir: mode === "production",
     cssCodeSplit: false,
     lib: {
       entry: path.resolve(__dirname, "src/main.ts"),
@@ -68,4 +70,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
