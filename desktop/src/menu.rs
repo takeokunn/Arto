@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use crate::components::content::set_preferences_tab_to_about;
 use crate::state::AppState;
-use crate::window::{self, CreateMainWindowConfigParams};
+use crate::window::{self, settings::normalize_zoom_level, CreateMainWindowConfigParams};
 
 /// Menu identifier enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -387,14 +387,14 @@ pub fn handle_menu_event_with_state(event: &MenuEvent, state: &mut AppState) -> 
             state.zoom_level.set(1.0);
         }
         MenuId::ZoomIn => {
-            let current = *state.zoom_level.read();
-            let next = ((current + 0.1) * 10.0).round() / 10.0;
-            state.zoom_level.set(next.min(5.0));
+            let current = normalize_zoom_level(*state.zoom_level.read());
+            let next = normalize_zoom_level(current + 0.1);
+            state.zoom_level.set(next);
         }
         MenuId::ZoomOut => {
-            let current = *state.zoom_level.read();
-            let next = ((current - 0.1) * 10.0).round() / 10.0;
-            state.zoom_level.set(next.max(0.5));
+            let current = normalize_zoom_level(*state.zoom_level.read());
+            let next = normalize_zoom_level(current - 0.1);
+            state.zoom_level.set(next);
         }
         MenuId::GoBack => {
             state.save_scroll_and_go_back();
