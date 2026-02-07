@@ -122,7 +122,6 @@
 
 /* Visual separator between pinned and unpinned groups */
 .tab.pinned + .tab:not(.pinned) {
-  margin-left: 4px;
   border-left: 1px solid var(--border-color);
   padding-left: 12px;
 }

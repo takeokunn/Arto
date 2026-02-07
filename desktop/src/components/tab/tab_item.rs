@@ -25,6 +25,7 @@ pub fn TabItem(
 
     let mut show_tooltip = use_signal(|| false);
     let mut tooltip_position = use_signal(|| (0i32, 0i32));
+    let mut is_hovered = use_signal(|| false);
 
     let mut show_context_menu = use_signal(|| false);
     let mut context_menu_position = use_signal(|| (0, 0));
@@ -226,19 +227,26 @@ pub fn TabItem(
             },
             oncontextmenu: handle_context_menu,
             onmouseenter: move |_| {
+                is_hovered.set(true);
                 spawn(async move {
                     let mounted_data = tab_element.read().clone();
                     if let Some(ref mounted) = mounted_data {
                         if let Ok(rect) = mounted.get_client_rect().await {
-                            let x = (rect.origin.x + rect.size.width / 2.0) as i32;
-                            let y = (rect.origin.y + rect.size.height) as i32 + 4;
-                            tooltip_position.set((x, y));
-                            show_tooltip.set(true);
+                            // Only show tooltip if still hovered after async operation
+                            if *is_hovered.read() {
+                                let x = (rect.origin.x + rect.size.width / 2.0) as i32;
+                                let y = (rect.origin.y + rect.size.height) as i32 + 4;
+                                tooltip_position.set((x, y));
+                                show_tooltip.set(true);
+                            }
                         }
                     }
                 });
             },
-            onmouseleave: move |_| show_tooltip.set(false),
+            onmouseleave: move |_| {
+                is_hovered.set(false);
+                show_tooltip.set(false);
+            },
             onmounted: move |evt| {
                 // Store mounted data for accurate grab_offset calculation
                 tab_element.set(Some(evt.data()));
