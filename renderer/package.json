@@ -9,19 +9,19 @@
     "check": "oxlint"
   },
   "dependencies": {
-    "@types/node": "^24.7.2",
-    "github-markdown-css": "^5.8.1",
+    "@types/node": "^25.2.1",
+    "github-markdown-css": "^5.9.0",
     "highlight.js": "^11.11.1",
-    "katex": "^0.16.11",
-    "mermaid": "^11.4.1"
+    "katex": "^0.16.28",
+    "mermaid": "^11.12.2"
   },
   "devDependencies": {
-    "@tabler/icons": "^3.35.0",
-    "oxfmt": "^0.20.0",
-    "oxlint": "^1.35.0",
-    "tsx": "^4.19.2",
+    "@tabler/icons": "^3.36.1",
+    "oxfmt": "^0.28.0",
+    "oxlint": "^1.43.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vite": "^7.1.9"
+    "vite": "^7.3.1"
   },
   "packageManager": "pnpm@9.15.9"
 }
