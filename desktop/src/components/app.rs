@@ -33,7 +33,7 @@ const MOUSE_BUTTON_LEFT: u32 = 0;
 #[component]
 pub fn App(
     tab: Tab,           // Initial tab (always provided, preserves history)
-    directory: PathBuf, // Directory (resolved in create_new_main_window)
+    directory: PathBuf, // Directory (resolved in create_main_window or MainApp)
     theme: Theme,       // The enum: Auto/Light/Dark
     sidebar_open: bool,
     sidebar_width: f64,
@@ -69,6 +69,10 @@ pub fn App(
         let metrics = crate::window::metrics::capture_window_metrics(&window().window);
         *app_state.position.write() = LogicalPosition::new(metrics.position.x, metrics.position.y);
         *app_state.size.write() = LogicalSize::new(metrics.size.width, metrics.size.height);
+
+        // Register this window in MAIN_WINDOWS list for cross-window access.
+        // This enables fire-and-forget window creation (no need to await new_window()).
+        crate::window::register_main_window(std::rc::Rc::downgrade(&window()));
 
         // Register this window's state for cross-window access
         crate::window::register_window_state(window().id(), app_state);

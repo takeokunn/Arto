@@ -19,7 +19,6 @@ mod window;
 use clap::Parser;
 use dioxus::desktop::tao::event::{Event, WindowEvent};
 use std::path::PathBuf;
-use tokio::sync::mpsc::channel;
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::prelude::*;
 
@@ -77,26 +76,17 @@ fn main() {
     // Clear stale WebView cache when build changes (app upgrade via Homebrew, etc.)
     cache::clear_stale_webview_cache_if_needed();
 
-    // Create event channel and store receiver for MainApp
-    let (tx, rx) = channel::<components::main_app::OpenEvent>(10);
-    components::main_app::OPEN_EVENT_RECEIVER
-        .lock()
-        .expect("Failed to lock OPEN_EVENT_RECEIVER")
-        .replace(rx);
-
     // Start IPC server to accept connections from future instances
-    ipc::start_ipc_server(tx.clone());
+    ipc::start_ipc_server();
 
-    // Send CLI paths as OpenEvents (before Dioxus launches)
+    // Push CLI paths to IPC event queue (MainApp will pop the first one)
     for path in cli.paths {
         let event = match ipc::validate_path(&path) {
             Some(event) => event,
             None => continue, // Invalid path, already logged by validate_path
         };
-        tracing::debug!(?event, "Sending CLI path as open event");
-        if let Err(e) = tx.try_send(event) {
-            tracing::warn!(?e, "Failed to send CLI path event");
-        }
+        tracing::debug!(?event, "Pushing CLI path to IPC event queue");
+        ipc::push_event(event);
     }
 
     let menu = menu::build_menu();
@@ -106,31 +96,36 @@ fn main() {
 
     let config = window::create_main_window_config(&params)
         .with_custom_event_handler(move |event, _target| {
-            use components::main_app::OpenEvent;
             match event {
                 Event::Opened { urls, .. } => {
-                    tracing::info!("Event::Opened received with {} URLs", urls.len());
-                    let paths = urls.iter().filter_map(|url| match url.to_file_path() {
-                        Ok(path) => Some(path),
-                        Err(_) => {
-                            tracing::info!(?url, "Non file/directory path URL is specified. Skip.");
-                            None
+                    // Handle file/directory open events from Finder
+                    tracing::debug!(url_count = urls.len(), "Event::Opened received");
+                    for url in urls {
+                        match url.to_file_path() {
+                            Ok(path) => {
+                                let event = if path.is_dir() {
+                                    ipc::OpenEvent::Directory(path)
+                                } else {
+                                    ipc::OpenEvent::File(path)
+                                };
+                                ipc::push_event(event);
+                            }
+                            Err(_) => {
+                                tracing::info!(
+                                    ?url,
+                                    "Non file/directory path URL is specified. Skip."
+                                );
+                            }
                         }
-                    });
-                    for path in paths {
-                        if path.is_dir() {
-                            tx.try_send(OpenEvent::Directory(path))
-                                .expect("Failed to send directory open event");
-                        } else {
-                            tx.try_send(OpenEvent::File(path))
-                                .expect("Failed to send file open event");
-                        };
                     }
+                    // Process immediately (we're on the main thread)
+                    ipc::process_pending_events();
                 }
                 Event::Reopen { .. } => {
-                    tracing::info!("Event::Reopen received (dock click or app activation)");
-                    tx.try_send(OpenEvent::Reopen)
-                        .expect("Failed to send reopen event");
+                    // Handle dock click / app activation
+                    tracing::debug!("Event::Reopen received (dock click or app activation)");
+                    ipc::push_event(ipc::OpenEvent::Reopen);
+                    ipc::process_pending_events();
                 }
                 Event::WindowEvent {
                     event: WindowEvent::Focused(true),
@@ -145,13 +140,23 @@ fn main() {
                         window::update_last_focused_window(*window_id);
                     }
                 }
+                Event::MainEventsCleared => {
+                    // Defense in depth: drain the IPC queue once per event-loop cycle.
+                    //
+                    // On macOS, GCD wake (dispatch_async_f) reliably delivers IPC events,
+                    // so this branch is effectively redundant. It exists as a fallback for
+                    // future cross-platform support where wake_main_thread() may not have
+                    // a fully reliable platform-specific implementation (e.g., Linux/Windows).
+                    ipc::process_pending_events();
+                }
                 _ => {}
             }
         })
         .with_menu(menu);
 
     // Launch MainApp (first window only)
-    // Initial event will be consumed inside MainApp after Dioxus starts
+    // MainApp pops the first CLI event from IPC queue for its initial tab.
+    // Remaining events are processed by custom_event_handler and GCD callbacks.
     dioxus::LaunchBuilder::desktop()
         .with_cfg(config)
         .launch(components::main_app::MainApp);

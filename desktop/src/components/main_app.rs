@@ -1,75 +1,10 @@
+use crate::ipc::OpenEvent;
 use crate::state::Tab;
-use crate::window as window_manager;
-use crate::window::{settings, CreateMainWindowConfigParams};
-use dioxus::core::spawn_forever;
+use crate::window::settings;
 use dioxus::desktop::use_muda_event_handler;
 use dioxus::desktop::{window, WindowCloseBehaviour};
 use dioxus::prelude::*;
 use std::path::PathBuf;
-use std::sync::Mutex;
-use tokio::sync::mpsc::Receiver;
-
-// ============================================================================
-// OpenEvent definition
-// ============================================================================
-
-/// Open event types for distinguishing files, directories, and reopen events
-/// Used to communicate between OS event handler (main.rs) and MainApp component
-#[derive(Debug, Clone)]
-pub enum OpenEvent {
-    /// File opened from Finder/CLI
-    File(PathBuf),
-    /// Directory opened from Finder/CLI (should set sidebar root)
-    Directory(PathBuf),
-    /// App icon clicked (reopen event)
-    Reopen,
-}
-
-/// A global receiver to receive open events from the main thread (OS → Dioxus context)
-/// This is set once by main.rs and consumed once by this MainApp component.
-pub static OPEN_EVENT_RECEIVER: Mutex<Option<Receiver<OpenEvent>>> = Mutex::new(None);
-
-// ============================================================================
-// System event handling
-// ============================================================================
-
-#[tracing::instrument]
-fn handle_open_event(event: OpenEvent) {
-    match event {
-        OpenEvent::File(file) => {
-            spawn(async move {
-                window_manager::create_new_main_window_with_file(
-                    file,
-                    CreateMainWindowConfigParams::default(),
-                )
-                .await;
-            });
-        }
-        OpenEvent::Directory(dir) => {
-            spawn(async move {
-                let params = CreateMainWindowConfigParams {
-                    directory: Some(dir),
-                    ..Default::default()
-                };
-                window_manager::create_new_main_window_with_empty(params).await;
-            });
-        }
-        OpenEvent::Reopen => {
-            if window_manager::is_main_app_window_visible() {
-                // MainApp is visible, create a new window
-                spawn(async move {
-                    window_manager::create_new_main_window_with_empty(
-                        CreateMainWindowConfigParams::default(),
-                    )
-                    .await;
-                });
-            } else {
-                // MainApp is hidden, show it
-                window_manager::show_main_app_window();
-            }
-        }
-    }
-}
 
 // ============================================================================
 // MainApp component
@@ -80,6 +15,10 @@ fn handle_open_event(event: OpenEvent) {
 ///
 /// NOTE: This component should only be used for the first window launched from main.rs.
 /// Additional windows should use the App component directly.
+///
+/// System events (Reopen, file open, IPC) are handled by the Tao event loop's
+/// custom_event_handler and IPC's GCD wake callback.
+/// This component only handles the initial event (first CLI path) for its own tab.
 #[component]
 pub fn MainApp() -> Element {
     // Configure WindowCloseBehaviour::WindowHides for first window
@@ -87,18 +26,10 @@ pub fn MainApp() -> Element {
         tracing::debug!("Configuring main window with WindowHides behavior");
         window().set_close_behavior(WindowCloseBehaviour::WindowHides);
 
-        // Register the first window in MAIN_WINDOWS list
-        // This is critical for has_any_main_windows() to work correctly
-        let weak_handle = std::rc::Rc::downgrade(&window());
-        window_manager::register_main_window(weak_handle);
-
         // Set chrome inset (window frame offset) - only first call takes effect
         let win = &window().window;
         if let (Ok(inner), Ok(outer)) = (win.inner_position(), win.outer_position()) {
-            window_manager::set_chrome_inset(
-                (inner.x - outer.x) as f64,
-                (inner.y - outer.y) as f64,
-            );
+            crate::window::set_chrome_inset((inner.x - outer.x) as f64, (inner.y - outer.y) as f64);
         }
     });
 
@@ -107,21 +38,13 @@ pub fn MainApp() -> Element {
         crate::menu::handle_menu_event_global(event);
     });
 
-    // Get receiver and consume initial event
-    let mut rx = OPEN_EVENT_RECEIVER
-        .lock()
-        .expect("Failed to lock OPEN_EVENT_RECEIVER")
-        .take()
-        .expect("OPEN_EVENT_RECEIVER not initialized");
-
-    // Handle initial event (file, directory, or none)
-    let first_event = if let Ok(event) = rx.try_recv() {
-        tracing::debug!(?event, "Received initial open event");
-        Some(event)
+    // Pop the first event from IPC queue (CLI path pushed by main.rs before launch)
+    let first_event = crate::ipc::try_pop_first_event();
+    if first_event.is_some() {
+        tracing::debug!(?first_event, "Received initial open event from IPC queue");
     } else {
         tracing::debug!("No initial event, will show welcome screen");
-        None
-    };
+    }
 
     // Resolve initial tab and directory from event
     let is_first_window = true;
@@ -147,16 +70,9 @@ pub fn MainApp() -> Element {
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("/"));
 
-    // Set up system event handler (for subsequent events)
-    use_hook(|| {
-        spawn_forever(async move {
-            while let Some(event) = rx.recv().await {
-                handle_open_event(event);
-            }
-        });
-    });
-
     // Render App component with initial state
+    // Subsequent system events are handled by custom_event_handler (main.rs)
+    // and GCD wake callback (ipc.rs).
     rsx! {
         crate::components::app::App {
             tab: tab,

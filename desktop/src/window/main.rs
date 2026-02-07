@@ -192,60 +192,66 @@ pub fn focus_window(window_id: WindowId) -> bool {
 pub fn close_all_main_windows() {
     let windows = list_main_windows();
     windows.iter().for_each(|w| w.close());
-    MAIN_WINDOWS.with(|w| w.borrow_mut().clear());
+    // Do not clear MAIN_WINDOWS: MainApp uses WindowCloseBehaviour::WindowHides,
+    // so close() hides it instead of destroying it. Clearing would make
+    // get_main_app_window() panic and break IPC window creation.
+    // Dead entries are pruned naturally by register_main_window().
 }
 
-/// Core function: Create new main window with a tab
-/// Returns the window handle (Rc<DesktopService>) for further operations
+// ============================================================================
+// Shared helpers for window creation (used by both sync and async paths)
+// ============================================================================
+
+/// Resolve the directory for a new window.
 ///
-/// Directory resolution priority:
-/// 1. params.directory (from config or user)
-/// 2. tab.file().parent() (auto-detect from tab content)
-/// 3. dirs::home_dir() (fallback)
-/// 4. "/" (final fallback - always succeeds)
-pub(crate) async fn create_new_main_window(
-    tab: Tab,
-    mut params: CreateMainWindowConfigParams,
-) -> Rc<DesktopService> {
-    // Resolve directory: params → tab parent → home dir → root (guaranteed to succeed)
-    let directory = params
-        .directory
-        .take()
+/// Priority: params.directory → tab parent → home dir → root
+fn resolve_directory(params_directory: Option<PathBuf>, tab: &Tab) -> PathBuf {
+    params_directory
         .or_else(|| tab.file().and_then(|p| p.parent().map(|p| p.to_path_buf())))
         .or_else(dirs::home_dir)
-        .unwrap_or_else(|| PathBuf::from("/"));
+        .unwrap_or_else(|| PathBuf::from("/"))
+}
 
-    // Apply position shift based on existing windows (unless skip_position_shift is set)
-    let shifted_position = if params.skip_position_shift {
+/// Compute the shifted position for a new window, avoiding overlap with existing windows.
+fn compute_shifted_position(params: &CreateMainWindowConfigParams) -> LogicalPosition<i32> {
+    if params.skip_position_shift {
         tracing::debug!(
             resolved_position=?params.position,
             "Position shift skipped (skip_position_shift=true)"
         );
-        params.position
-    } else {
-        let position_offset = CONFIG.read().window_position.position_offset;
-        let (screen_origin, screen_size) = get_current_display_bounds()
-            .unwrap_or_else(|| (LogicalPosition::new(0, 0), LogicalSize::new(1000, 800)));
-        let occupied = list_main_window_positions();
-        let result = shift_position_if_needed(
-            params.position,
-            params.size,
-            position_offset,
-            screen_origin,
-            screen_size,
-            &occupied,
-        );
-        tracing::debug!(
-            screen_size=?screen_size,
-            position_offset=?position_offset,
-            resolved_position=?params.position,
-            shifted_position=?result,
-            "Shifted position is calculated"
-        );
-        result
-    };
+        return params.position;
+    }
 
-    // Create VirtualDom with the provided tab and params
+    let position_offset = CONFIG.read().window_position.position_offset;
+    let (screen_origin, screen_size) = get_current_display_bounds()
+        .unwrap_or_else(|| (LogicalPosition::new(0, 0), LogicalSize::new(1000, 800)));
+    let occupied = list_main_window_positions();
+    let result = shift_position_if_needed(
+        params.position,
+        params.size,
+        position_offset,
+        screen_origin,
+        screen_size,
+        &occupied,
+    );
+    tracing::debug!(
+        screen_size=?screen_size,
+        position_offset=?position_offset,
+        resolved_position=?params.position,
+        shifted_position=?result,
+        "Shifted position is calculated"
+    );
+    result
+}
+
+/// Build VirtualDom and Config for a new main window.
+fn build_window_dom_and_config(
+    tab: Tab,
+    mut params: CreateMainWindowConfigParams,
+) -> (VirtualDom, Config) {
+    let directory = resolve_directory(params.directory.take(), &tab);
+    let shifted_position = compute_shifted_position(&params);
+
     let dom = VirtualDom::new_with_props(
         App,
         AppProps {
@@ -261,35 +267,64 @@ pub(crate) async fn create_new_main_window(
         },
     );
 
-    // Override position with shifted position
     let params_with_shift = CreateMainWindowConfigParams {
         position: shifted_position,
         ..params
     };
 
-    let config = create_main_window_config(&params_with_shift).with_menu(None); // To avoid child window taking over the main window's menu
+    // with_menu(None) prevents child window from taking over the main window's menu
+    let config = create_main_window_config(&params_with_shift).with_menu(None);
+
+    (dom, config)
+}
+
+// ============================================================================
+// Synchronous (fire-and-forget) window creation
+// ============================================================================
+
+/// Create a new main window synchronously (fire-and-forget).
+///
+/// The window is created by the Tao event loop on the next iteration.
+/// The App component self-registers via `register_main_window()`.
+///
+/// IMPORTANT: Must be called on the main thread (event loop thread).
+pub fn create_main_window_sync(
+    desktop: &Rc<DesktopService>,
+    tab: Tab,
+    params: CreateMainWindowConfigParams,
+) {
+    let (dom, config) = build_window_dom_and_config(tab, params);
+
+    // Fire-and-forget: PendingDesktopContext is dropped, but window still gets created.
+    // new_window() synchronously pushes PendingWebview and sends NewWindow event.
+    let _pending = desktop.new_window(dom, config);
+}
+
+/// Get any live main window's DesktopService.
+///
+/// Used to access `new_window()` from outside Dioxus component context
+/// (e.g., from `with_custom_event_handler`). All DesktopService instances
+/// share the same `SharedContext`, so any window works.
+pub fn get_any_main_window() -> Option<Rc<DesktopService>> {
+    MAIN_WINDOWS.with(|windows| windows.borrow().iter().find_map(|w| w.upgrade()))
+}
+
+// ============================================================================
+// Async window creation (used by drag-and-drop etc.)
+// ============================================================================
+
+/// Create a new main window with a tab (async version).
+/// Returns the window handle for further operations (e.g., drag preview).
+pub(crate) async fn create_main_window(
+    tab: Tab,
+    params: CreateMainWindowConfigParams,
+) -> Rc<DesktopService> {
+    let (dom, config) = build_window_dom_and_config(tab, params);
 
     let pending = window().new_window(dom, config);
     let handle = pending.await;
-    register_main_window(Rc::downgrade(&handle));
 
     handle
-}
-
-/// Convenience: Create window with file
-pub async fn create_new_main_window_with_file(
-    file: impl Into<PathBuf>,
-    params: CreateMainWindowConfigParams,
-) -> Rc<DesktopService> {
-    let file = file.into();
-    create_new_main_window(Tab::new(file), params).await
-}
-
-/// Convenience: Create window with empty tab
-pub async fn create_new_main_window_with_empty(
-    params: CreateMainWindowConfigParams,
-) -> Rc<DesktopService> {
-    create_new_main_window(Tab::default(), params).await
 }
 
 pub fn update_last_focused_window(window_id: WindowId) {
