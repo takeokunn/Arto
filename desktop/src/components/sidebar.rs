@@ -13,8 +13,7 @@ pub fn Sidebar() -> Element {
     let sidebar_state = state.sidebar.read();
     let is_visible = sidebar_state.open;
     let width = sidebar_state.width;
-
-    let zoom_level = state.zoom_level;
+    let zoom_level = sidebar_state.zoom_level;
     let mut is_resizing = use_signal(|| false);
 
     let outer_style = if is_visible {
@@ -23,7 +22,7 @@ pub fn Sidebar() -> Element {
         "width: 0;".to_string()
     };
 
-    let inner_style = format!("zoom: {};", zoom_level());
+    let inner_style = format!("zoom: {};", zoom_level);
 
     rsx! {
         div {
