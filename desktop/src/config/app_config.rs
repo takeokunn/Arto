@@ -60,12 +60,14 @@ mod tests {
         assert!(!config.sidebar.default_open); // Default is false
         assert_eq!(config.sidebar.default_width, 280.0);
         assert!(!config.sidebar.default_show_all_files);
+        assert_eq!(config.sidebar.default_zoom_level, 1.0);
         assert_eq!(config.sidebar.on_startup, StartupBehavior::Default);
         assert_eq!(config.sidebar.on_new_window, NewWindowBehavior::Default);
 
         // Right sidebar defaults
         assert!(!config.right_sidebar.default_open);
         assert_eq!(config.right_sidebar.default_width, 220.0);
+        assert_eq!(config.right_sidebar.default_zoom_level, 1.0);
         assert_eq!(config.right_sidebar.on_startup, StartupBehavior::Default);
         assert_eq!(
             config.right_sidebar.on_new_window,
@@ -132,6 +134,7 @@ mod tests {
                 default_open: false,
                 default_width: 320.0,
                 default_show_all_files: true,
+                default_zoom_level: 1.2,
                 on_startup: StartupBehavior::LastClosed,
                 on_new_window: NewWindowBehavior::LastFocused,
             },
@@ -139,6 +142,7 @@ mod tests {
                 default_open: true,
                 default_width: 250.0,
                 default_tab: Default::default(),
+                default_zoom_level: 0.8,
                 on_startup: StartupBehavior::LastClosed,
                 on_new_window: NewWindowBehavior::LastFocused,
             },
@@ -190,8 +194,10 @@ mod tests {
         );
         assert!(!parsed.sidebar.default_open);
         assert_eq!(parsed.sidebar.default_width, 320.0);
+        assert_eq!(parsed.sidebar.default_zoom_level, 1.2);
         assert!(parsed.right_sidebar.default_open);
         assert_eq!(parsed.right_sidebar.default_width, 250.0);
+        assert_eq!(parsed.right_sidebar.default_zoom_level, 0.8);
         assert_eq!(parsed.window_position.default_position.x.value, 10.0);
         assert_eq!(
             parsed.window_position.default_position.x.unit,
@@ -221,5 +227,9 @@ mod tests {
         assert_eq!(parsed.zoom.default_zoom_level, 1.0);
         assert_eq!(parsed.zoom.on_startup, StartupBehavior::Default);
         assert_eq!(parsed.zoom.on_new_window, NewWindowBehavior::Default);
+
+        // Sidebar zoom defaults
+        assert_eq!(parsed.sidebar.default_zoom_level, 1.0);
+        assert_eq!(parsed.right_sidebar.default_zoom_level, 1.0);
     }
 }
