@@ -1,22 +1,23 @@
 import mermaid from "mermaid";
 import type { Theme } from "./theme";
+import { buildMermaidThemeConfig } from "./mermaid-theme";
 import { openMermaidWindow } from "./mermaid-window-controller";
 
 export function init(): void {
+  const config = buildMermaidThemeConfig("light");
   mermaid.initialize({
-    startOnLoad: false, // We'll manually trigger rendering
-    theme: "default", // Will be updated based on app theme
-    securityLevel: "loose", // Allow more flexibility in diagrams
+    startOnLoad: false,
+    ...config,
+    securityLevel: "loose",
     fontFamily: "inherit",
   });
 }
 
 export function setTheme(theme: Theme): void {
-  // Update mermaid theme configuration
-  const mermaidTheme = theme === "dark" ? "dark" : "default";
+  const config = buildMermaidThemeConfig(theme);
   mermaid.initialize({
     startOnLoad: false,
-    theme: mermaidTheme,
+    ...config,
     securityLevel: "loose",
     fontFamily: "inherit",
   });
@@ -62,8 +63,12 @@ async function renderDiagram(element: HTMLElement): Promise<void> {
     // Generate a unique ID for this diagram
     const id = `mermaid-${crypto.randomUUID()}`;
 
-    // Render the diagram
-    const { svg } = await mermaid.render(id, mermaidSource);
+    // Render the diagram inside the target element so Mermaid measures
+    // text in the same CSS context where the SVG will be displayed.
+    // Without this, Mermaid measures text in a temporary container on
+    // document.body (outside .markdown-body), causing size mismatches
+    // between node boxes and their text content.
+    const { svg } = await mermaid.render(id, mermaidSource, element);
 
     // Replace the text content with the rendered SVG
     element.innerHTML = svg;
