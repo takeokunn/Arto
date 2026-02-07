@@ -1,5 +1,6 @@
 import mermaid from "mermaid";
 import type { Theme } from "./theme";
+import { buildMermaidThemeConfig } from "./mermaid-theme";
 import {
   createBlobPromise,
   createCanvasFromSvg,
@@ -122,10 +123,10 @@ class MermaidWindowController {
   }
 
   #initializeMermaidTheme(theme: Theme): void {
-    const mermaidTheme = theme === "dark" ? "dark" : "default";
+    const config = buildMermaidThemeConfig(theme);
     mermaid.initialize({
       startOnLoad: false,
-      theme: mermaidTheme,
+      ...config,
       securityLevel: "loose",
       fontFamily: "inherit",
     });

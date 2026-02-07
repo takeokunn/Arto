@@ -1,22 +1,23 @@
 import mermaid from "mermaid";
 import type { Theme } from "./theme";
+import { buildMermaidThemeConfig } from "./mermaid-theme";
 import { openMermaidWindow } from "./mermaid-window-controller";
 
 export function init(): void {
+  const config = buildMermaidThemeConfig("light");
   mermaid.initialize({
-    startOnLoad: false, // We'll manually trigger rendering
-    theme: "default", // Will be updated based on app theme
-    securityLevel: "loose", // Allow more flexibility in diagrams
+    startOnLoad: false,
+    ...config,
+    securityLevel: "loose",
     fontFamily: "inherit",
   });
 }
 
 export function setTheme(theme: Theme): void {
-  // Update mermaid theme configuration
-  const mermaidTheme = theme === "dark" ? "dark" : "default";
+  const config = buildMermaidThemeConfig(theme);
   mermaid.initialize({
     startOnLoad: false,
-    theme: mermaidTheme,
+    ...config,
     securityLevel: "loose",
     fontFamily: "inherit",
   });
