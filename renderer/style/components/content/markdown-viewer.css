@@ -25,6 +25,10 @@
 
     pre.preprocessed-mermaid {
       text-align: center;
+      /* Override github-markdown-css pre rules (12px/1em) to match
+         Mermaid themeVariables.fontSize so text measurement and rendering
+         use the same font-size context */
+      font-size: var(--font-size-base);
     }
   }
 }

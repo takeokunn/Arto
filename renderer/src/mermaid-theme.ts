@@ -18,8 +18,16 @@ export function buildMermaidThemeConfig(theme: Theme): MermaidThemeConfig {
   return { theme: "default", themeVariables: lightThemeVariables };
 }
 
+// Shared font size matching Arto's --font-size-base (14px)
+// Mermaid defaults to 16px which causes text to overflow node boxes
+const sharedFontVariables: Record<string, string> = {
+  fontSize: "14px",
+};
+
 // Arto dark theme colors (from variables.css --dark-* tokens)
 const darkThemeVariables: Record<string, string> = {
+  ...sharedFontVariables,
+
   // Global
   background: "#0d1117", // --dark-content-bg
   primaryColor: "#1f6feb", // --dark-accent-bg
@@ -76,6 +84,8 @@ const darkThemeVariables: Record<string, string> = {
 
 // Arto light theme colors (from variables.css --light-* tokens)
 const lightThemeVariables: Record<string, string> = {
+  ...sharedFontVariables,
+
   // Global
   background: "#ffffff", // --light-content-bg
   primaryColor: "#0969da", // --light-accent-bg
