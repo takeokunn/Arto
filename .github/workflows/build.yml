@@ -116,6 +116,7 @@ jobs:
           VERSION="${{ github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
           sed -i '' "s/^version = \"0.0.0\"/version = \"${VERSION}\"/" desktop/Cargo.toml
+          echo "${VERSION}" > desktop/VERSION
       - run: just build
       - uses: actions/upload-artifact@v6
         with:
@@ -171,12 +172,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          # Get existing release notes and append installation instructions
-          gh release view "${{ github.event.release.tag_name }}" --json body -q .body > release_body.md
+          # Get existing release notes (handle null case)
+          gh release view "${{ github.event.release.tag_name }}" --json body -q '.body // ""' > release_body.md
+
+          # Remove existing installation block if present (for idempotency)
+          perl -i -0777 -pe 's/<!-- ARTO_INSTALLATION_START -->.*?<!-- ARTO_INSTALLATION_END -->//gs' release_body.md
+
+          # Append fresh installation instructions with markers
           cat >> release_body.md << BODY_EOF
 
           ---
 
+          <!-- ARTO_INSTALLATION_START -->
           ## macOS Installation
 
           ### Installation Steps (2 Security Approvals Required)
@@ -240,6 +247,7 @@ jobs:
           ---
 
           For more information, see the [README](https://github.com/${REPO}).
+          <!-- ARTO_INSTALLATION_END -->
           BODY_EOF
       - uses: ncipollo/release-action@v1.20.0
         with:
