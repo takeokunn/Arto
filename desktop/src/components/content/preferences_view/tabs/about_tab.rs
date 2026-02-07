@@ -5,7 +5,7 @@ const ARTO_ICON: Asset = asset!("/assets/arto-app.png");
 
 #[component]
 pub fn AboutTab() -> Element {
-    let version_text = format!("Version {}", env!("CARGO_PKG_VERSION"));
+    let version_text = format!("Version {}", env!("ARTO_BUILD_VERSION"));
 
     rsx! {
         div {

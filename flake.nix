@@ -27,12 +27,16 @@
           inherit (pkgs) lib;
           craneLib = crane.mkLib pkgs;
 
-          # Package metadata - read from Cargo.toml as single source of truth
-          # CI sets the actual version via sed before building (see .github/workflows/build.yml)
+          # Package metadata - version resolved from VERSION file (CI) or git rev (local)
           cargoToml = builtins.fromTOML (builtins.readFile ./desktop/Cargo.toml);
+          versionFile = ./desktop/VERSION;
+          artoVersion =
+            if builtins.pathExists versionFile
+            then builtins.replaceStrings [ "\n" ] [ "" ] (builtins.readFile versionFile)
+            else "${cargoToml.package.version}-${self.dirtyShortRev or self.shortRev or "unknown"}";
           packageMeta = {
             pname = cargoToml.package.name;
-            version = cargoToml.package.version;
+            version = artoVersion;
           };
 
           # Platform detection
@@ -88,9 +92,12 @@
                 (craneLib.fileset.commonCargoSources root)
                 (root + /assets)
                 (root + /Dioxus.toml)
+                (lib.fileset.maybeMissing (root + /VERSION))
               ];
             };
             strictDeps = true;
+            # Pass version to build.rs via environment variable
+            ARTO_BUILD_VERSION = artoVersion;
             buildInputs = lib.optionals isDarwin [
               pkgs.libiconv
             ];

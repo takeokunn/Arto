@@ -87,6 +87,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       # https://zenn.dev/mierune/articles/2af7b9e447712a
       - uses: chetan/git-restore-mtime-action@v2
       - uses: extractions/setup-just@v3
@@ -108,11 +110,6 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: dioxus-cli@${{ steps.dx-version.outputs.version }}
-      - name: Apply version
-        if: ${{ github.event_name == 'release' }}
-        run: |
-          sed -i '' "s/^version = \"0.0.0\"/version = \"${{ github.event.release.tag_name }}\"/" desktop/Cargo.toml
-          sed -i '' "s/^version = \"v\(.*\)\"/version = \"\1\"/" desktop/Cargo.toml
       - run: just build
       - uses: actions/upload-artifact@v6
         with:
@@ -127,6 +124,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: nixbuild/nix-quick-install-action@v34
         with:
           nix_conf: |
@@ -142,13 +141,10 @@ jobs:
           purge-created: 0
           purge-last-accessed: 604800
           purge-primary-key: never
-      - name: Apply version
-        if: ${{ github.event_name == 'release' }}
+      - name: Write version file
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
-          sed -i '' "s/^version = \"0.0.0\"/version = \"${VERSION}\"/" desktop/Cargo.toml
-          sed -i '' "/^name = \"arto\"$/{n;s/^version = \"0.0.0\"/version = \"${VERSION}\"/;}" desktop/Cargo.lock
+          VERSION=$(git describe --tags --always)
+          echo "${VERSION#v}" > desktop/VERSION
       - run: nix build
     timeout-minutes: 30
 
