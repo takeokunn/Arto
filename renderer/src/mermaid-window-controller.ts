@@ -138,12 +138,19 @@ class MermaidWindowController {
       if (this.#diagramContainer) {
         this.#diagramContainer.innerHTML = svg;
 
-        // Fix SVG dimensions for CSS zoom to work properly
+        // Set explicit pixel dimensions for CSS zoom to work properly.
+        // Use viewBox dimensions rather than getBBox() because Mermaid's
+        // Gantt renderer sets viewBox to the full intended area ("0 0 w h")
+        // while getBBox() may return smaller content bounds, creating a
+        // mismatch between viewBox and pixel dimensions that causes the
+        // diagram to appear extremely small after zoom scaling.
         const svgElement = this.#diagramContainer.querySelector("svg");
         if (svgElement) {
-          const bbox = svgElement.getBBox();
-          svgElement.setAttribute("width", String(bbox.width));
-          svgElement.setAttribute("height", String(bbox.height));
+          const dims = this.#getViewerDimensions(svgElement);
+          svgElement.setAttribute("width", String(dims.width));
+          svgElement.setAttribute("height", String(dims.height));
+          // Remove responsive max-width that conflicts with explicit dimensions
+          svgElement.style.removeProperty("max-width");
         }
 
         // Store source and ID for theme switching
@@ -313,7 +320,7 @@ class MermaidWindowController {
     const svg = this.#diagramContainer.querySelector("svg");
     if (!svg) return;
 
-    const bbox = svg.getBBox();
+    const dims = this.#getViewerDimensions(svg);
     const padding = 40; // padding on each side
 
     // Available space in the canvas
@@ -321,16 +328,16 @@ class MermaidWindowController {
     const availableHeight = this.#container.clientHeight - padding * 2;
 
     // Calculate scale to fit (allow up to max zoom)
-    const scaleX = availableWidth / bbox.width;
-    const scaleY = availableHeight / bbox.height;
+    const scaleX = availableWidth / dims.width;
+    const scaleY = availableHeight / dims.height;
     const scale = Math.min(scaleX, scaleY, this.#maxZoom);
 
     this.#state.scale = scale;
 
     // Center the diagram in the container
-    // The diagram's rendered size after zoom is: bbox.width * scale, bbox.height * scale
-    const scaledWidth = bbox.width * scale;
-    const scaledHeight = bbox.height * scale;
+    // The diagram's rendered size after zoom is: dims * scale
+    const scaledWidth = dims.width * scale;
+    const scaledHeight = dims.height * scale;
 
     // Center horizontally and vertically
     this.#state.offsetX = (this.#container.clientWidth - scaledWidth) / 2;
@@ -338,6 +345,24 @@ class MermaidWindowController {
 
     this.#updateTransform(false); // No animation for instant fit
     this.#updateZoomDisplay();
+  }
+
+  // Get the intended diagram dimensions from the SVG's viewBox attribute.
+  // Prefer viewBox over getBBox() because Mermaid sets viewBox to the full
+  // intended rendering area during diagram generation, whereas getBBox()
+  // returns only the tight content bounds which may be smaller (especially
+  // for Gantt charts where viewBox="0 0 w h" encompasses padding/axis area).
+  #getViewerDimensions(svg: SVGSVGElement): { width: number; height: number } {
+    const viewBox = svg.getAttribute("viewBox");
+    if (viewBox) {
+      const parts = viewBox.split(/[\s,]+/).map(Number);
+      if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+        return { width: parts[2], height: parts[3] };
+      }
+    }
+    // Fall back to getBBox for SVGs without viewBox
+    const bbox = svg.getBBox();
+    return { width: bbox.width || 1, height: bbox.height || 1 };
   }
 
   #updateTransform(animate = false): void {
