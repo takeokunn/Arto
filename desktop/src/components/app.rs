@@ -309,7 +309,7 @@ pub fn App(
                 Content {},
             }
 
-            RightSidebar { headings: state.toc_headings.read().clone() }
+            RightSidebar { headings: state.right_sidebar_headings.read().clone() }
 
             // Drag and drop overlay
             if is_dragging() {
