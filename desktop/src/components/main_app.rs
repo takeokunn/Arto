@@ -35,11 +35,8 @@ pub static OPEN_EVENT_RECEIVER: Mutex<Option<Receiver<OpenEvent>>> = Mutex::new(
 
 #[tracing::instrument]
 fn handle_open_event(event: OpenEvent) {
-    tracing::debug!(?event, "Handling system open event");
-
     match event {
         OpenEvent::File(file) => {
-            // Always create a new window for OS events (Finder, CLI, etc.)
             spawn(async move {
                 window_manager::create_new_main_window_with_file(
                     file,
@@ -49,7 +46,6 @@ fn handle_open_event(event: OpenEvent) {
             });
         }
         OpenEvent::Directory(dir) => {
-            // Always create a new window for OS events (Finder, CLI, etc.)
             spawn(async move {
                 let params = CreateMainWindowConfigParams {
                     directory: Some(dir),

@@ -632,11 +632,11 @@ fn handle_client_connection(stream: Stream, tx: Sender<OpenEvent>) {
             }
         };
 
-        tracing::debug!(?message, "Received IPC message");
+        tracing::info!(?message, "IPC: Received message from client");
 
         let event = message.into_open_event();
         if let Err(e) = tx.blocking_send(event) {
-            tracing::warn!(?e, "Failed to send IPC event to channel");
+            tracing::warn!(?e, "IPC: Failed to send event to channel");
         }
     }
 }

@@ -284,7 +284,6 @@ fn get_cmd_or_ctrl(code: Code, additional: Option<Modifiers>) -> Accelerator {
 /// Handle menu events that don't require app state
 pub fn handle_menu_event_global(event: &MenuEvent) -> bool {
     let menu_id = event.id().0.as_ref();
-    tracing::info!("Global menu event: {}", menu_id);
 
     let id = match MenuId::from_str(menu_id) {
         Some(id) => id,

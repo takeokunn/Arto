@@ -109,6 +109,7 @@ fn main() {
             use components::main_app::OpenEvent;
             match event {
                 Event::Opened { urls, .. } => {
+                    tracing::info!("Event::Opened received with {} URLs", urls.len());
                     let paths = urls.iter().filter_map(|url| match url.to_file_path() {
                         Ok(path) => Some(path),
                         Err(_) => {
@@ -127,7 +128,7 @@ fn main() {
                     }
                 }
                 Event::Reopen { .. } => {
-                    // Send reopen event through channel to handle it in component context
+                    tracing::info!("Event::Reopen received (dock click or app activation)");
                     tx.try_send(OpenEvent::Reopen)
                         .expect("Failed to send reopen event");
                 }
