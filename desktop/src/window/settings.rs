@@ -44,7 +44,7 @@ pub struct SidebarPreference {
     pub zoom_level: f64,
 }
 
-pub struct TocPreference {
+pub struct RightSidebarPreference {
     pub open: bool,
     pub width: f64,
     pub tab: RightSidebarTab,
@@ -309,13 +309,13 @@ pub fn get_sidebar_preference(is_first_window: bool) -> SidebarPreference {
     }
 }
 
-pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
+pub fn get_right_sidebar_preference(is_first_window: bool) -> RightSidebarPreference {
     let cfg = CONFIG.read();
     let pref = choose_by_behavior(
         is_first_window,
         cfg.right_sidebar.on_startup,
         cfg.right_sidebar.on_new_window,
-        || TocPreference {
+        || RightSidebarPreference {
             open: cfg.right_sidebar.default_open,
             width: cfg.right_sidebar.default_width,
             tab: cfg.right_sidebar.default_tab,
@@ -323,7 +323,7 @@ pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
         },
         || {
             if let Some(state) = get_last_focused_window_state() {
-                TocPreference {
+                RightSidebarPreference {
                     open: *state.right_sidebar_open.read(),
                     width: *state.right_sidebar_width.read(),
                     tab: *state.right_sidebar_tab.read(),
@@ -331,7 +331,7 @@ pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
                 }
             } else {
                 let persisted = PersistedState::load();
-                TocPreference {
+                RightSidebarPreference {
                     open: persisted.right_sidebar_open,
                     width: persisted.right_sidebar_width,
                     tab: persisted.right_sidebar_tab,
@@ -341,7 +341,7 @@ pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
         },
     );
     // Normalize zoom level to valid range with 0.1 step
-    TocPreference {
+    RightSidebarPreference {
         zoom_level: normalize_sidebar_zoom_level(pref.zoom_level),
         ..pref
     }
@@ -448,9 +448,9 @@ mod tests {
     }
 
     #[test]
-    fn test_get_toc_preference_first_window() {
-        let result = get_toc_preference(true);
-        // Should return a TocPreference
+    fn test_get_right_sidebar_preference_first_window() {
+        let result = get_right_sidebar_preference(true);
+        // Should return a RightSidebarPreference
         assert!(result.width > 0.0);
         assert!(matches!(
             result.tab,
@@ -459,9 +459,9 @@ mod tests {
     }
 
     #[test]
-    fn test_get_toc_preference_new_window() {
-        let result = get_toc_preference(false);
-        // Should return a TocPreference
+    fn test_get_right_sidebar_preference_new_window() {
+        let result = get_right_sidebar_preference(false);
+        // Should return a RightSidebarPreference
         assert!(result.width > 0.0);
         assert!(matches!(
             result.tab,

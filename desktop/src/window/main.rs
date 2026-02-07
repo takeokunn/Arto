@@ -49,10 +49,10 @@ pub struct CreateMainWindowConfigParams {
     pub sidebar_width: f64,
     pub sidebar_show_all_files: bool,
     pub sidebar_zoom_level: f64,
-    pub toc_open: bool,
-    pub toc_width: f64,
-    pub toc_tab: RightSidebarTab,
-    pub toc_zoom_level: f64,
+    pub right_sidebar_open: bool,
+    pub right_sidebar_width: f64,
+    pub right_sidebar_tab: RightSidebarTab,
+    pub right_sidebar_zoom_level: f64,
     pub zoom_level: f64,
     pub size: LogicalSize<u32>,
     pub position: LogicalPosition<i32>,
@@ -68,7 +68,7 @@ impl CreateMainWindowConfigParams {
         let directory_pref = settings::get_directory_preference(is_first_window);
         let theme_pref = settings::get_theme_preference(is_first_window);
         let sidebar_pref = settings::get_sidebar_preference(is_first_window);
-        let toc_pref = settings::get_toc_preference(is_first_window);
+        let right_sidebar_pref = settings::get_right_sidebar_preference(is_first_window);
         let zoom_pref = settings::get_zoom_preference(is_first_window);
         let size_pref = settings::get_window_size_preference(is_first_window);
         let position_pref = settings::get_window_position_preference(is_first_window);
@@ -80,10 +80,10 @@ impl CreateMainWindowConfigParams {
             sidebar_width: sidebar_pref.width,
             sidebar_show_all_files: sidebar_pref.show_all_files,
             sidebar_zoom_level: sidebar_pref.zoom_level,
-            toc_open: toc_pref.open,
-            toc_width: toc_pref.width,
-            toc_tab: toc_pref.tab,
-            toc_zoom_level: toc_pref.zoom_level,
+            right_sidebar_open: right_sidebar_pref.open,
+            right_sidebar_width: right_sidebar_pref.width,
+            right_sidebar_tab: right_sidebar_pref.tab,
+            right_sidebar_zoom_level: right_sidebar_pref.zoom_level,
             zoom_level: zoom_pref.zoom_level,
             size: size_pref.size,
             position: position_pref.position,
@@ -269,10 +269,10 @@ fn build_window_dom_and_config(
             sidebar_width: params.sidebar_width,
             sidebar_show_all_files: params.sidebar_show_all_files,
             sidebar_zoom_level: params.sidebar_zoom_level,
-            toc_open: params.toc_open,
-            toc_width: params.toc_width,
-            toc_tab: params.toc_tab,
-            toc_zoom_level: params.toc_zoom_level,
+            right_sidebar_open: params.right_sidebar_open,
+            right_sidebar_width: params.right_sidebar_width,
+            right_sidebar_tab: params.right_sidebar_tab,
+            right_sidebar_zoom_level: params.right_sidebar_zoom_level,
             zoom_level: params.zoom_level,
         },
     );
