@@ -23,6 +23,9 @@ pub fn TabItem(
     let file_path = tab.file().map(|p| p.to_path_buf());
     let is_pinned = tab.pinned;
 
+    let mut show_tooltip = use_signal(|| false);
+    let mut tooltip_position = use_signal(|| (0i32, 0i32));
+
     let mut show_context_menu = use_signal(|| false);
     let mut context_menu_position = use_signal(|| (0, 0));
     let mut other_windows = use_signal(Vec::new);
@@ -222,6 +225,24 @@ pub fn TabItem(
                 }
             },
             oncontextmenu: handle_context_menu,
+            onmouseenter: {
+                let tab_element = tab_element.clone();
+                move |_| {
+                    let tab_element = tab_element.clone();
+                    spawn(async move {
+                        let mounted_data = tab_element.read().clone();
+                        if let Some(ref mounted) = mounted_data {
+                            if let Ok(rect) = mounted.get_client_rect().await {
+                                let x = (rect.origin.x + rect.size.width / 2.0) as i32;
+                                let y = (rect.origin.y + rect.size.height) as i32 + 4;
+                                tooltip_position.set((x, y));
+                                show_tooltip.set(true);
+                            }
+                        }
+                    });
+                }
+            },
+            onmouseleave: move |_| show_tooltip.set(false),
             onmounted: move |evt| {
                 // Store mounted data for accurate grab_offset calculation
                 tab_element.set(Some(evt.data()));
@@ -246,6 +267,20 @@ pub fn TabItem(
                         state.close_tab(index);
                     },
                     Icon { name: IconName::Close, size: 14 }
+                }
+            }
+        }
+
+        // Tooltip (position: fixed to escape tab-bar overflow clipping)
+        if *show_tooltip.read() && !*show_context_menu.read() {
+            {
+                let (tx, ty) = *tooltip_position.read();
+                rsx! {
+                    div {
+                        class: "tab-tooltip",
+                        style: "left: {tx}px; top: {ty}px;",
+                        "{tab_name}"
+                    }
                 }
             }
         }

@@ -67,6 +67,23 @@
   background: var(--bg-secondary);
 }
 
+/* Tab tooltip (position: fixed to escape tab-bar overflow clipping) */
+.tab-tooltip {
+  position: fixed;
+  transform: translateX(-50%);
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: var(--z-dropdown);
+}
+
 .tab.active {
   color: var(--text-color);
   opacity: 1;
