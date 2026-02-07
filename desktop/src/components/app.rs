@@ -19,7 +19,6 @@ use super::search_bar::SearchBar;
 use super::sidebar::Sidebar;
 use super::tab::TabBar;
 use crate::assets::MAIN_SCRIPT;
-use crate::config::CONFIG;
 use crate::drag;
 use crate::events::{
     ActiveDragUpdate, ACTIVE_DRAG_UPDATE, OPEN_DIRECTORY_IN_WINDOW, OPEN_FILE_IN_WINDOW,
@@ -39,9 +38,11 @@ pub fn App(
     sidebar_open: bool,
     sidebar_width: f64,
     sidebar_show_all_files: bool,
+    sidebar_zoom_level: f64,
     toc_open: bool,
     toc_width: f64,
     toc_tab: RightSidebarTab,
+    toc_zoom_level: f64,
     zoom_level: f64,
 ) -> Element {
     // Initialize application state with the provided tab
@@ -68,17 +69,12 @@ pub fn App(
             app_state.right_sidebar_tab.set(toc_tab);
         }
 
-        // Apply initial sidebar zoom levels from config
+        // Apply initial zoom levels from params (already normalized in window::settings)
         {
-            let cfg = CONFIG.read();
-            app_state.sidebar.write().zoom_level = cfg.sidebar.default_zoom_level;
-            app_state
-                .right_sidebar_zoom_level
-                .set(cfg.right_sidebar.default_zoom_level);
+            app_state.sidebar.write().zoom_level = sidebar_zoom_level;
+            app_state.right_sidebar_zoom_level.set(toc_zoom_level);
+            app_state.zoom_level.set(zoom_level);
         }
-
-        // Apply initial zoom level from params
-        app_state.zoom_level.set(zoom_level);
 
         let metrics = crate::window::metrics::capture_window_metrics(&window().window);
         *app_state.position.write() = LogicalPosition::new(metrics.position.x, metrics.position.y);

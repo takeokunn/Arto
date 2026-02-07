@@ -82,9 +82,11 @@ pub fn MainApp() -> Element {
             sidebar_open: sidebar_pref.open,
             sidebar_width: sidebar_pref.width,
             sidebar_show_all_files: sidebar_pref.show_all_files,
+            sidebar_zoom_level: sidebar_pref.zoom_level,
             toc_open: toc_pref.open,
             toc_width: toc_pref.width,
             toc_tab: toc_pref.tab,
+            toc_zoom_level: toc_pref.zoom_level,
             zoom_level: zoom_pref.zoom_level,
         }
     }
