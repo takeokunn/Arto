@@ -13,7 +13,7 @@ jobs:
   check:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # https://zenn.dev/mierune/articles/2af7b9e447712a
       - uses: chetan/git-restore-mtime-action@v2
       - uses: extractions/setup-just@v3
@@ -24,7 +24,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           cache: "pnpm"
           cache-dependency-path: ./renderer/pnpm-lock.yaml
@@ -43,7 +43,7 @@ jobs:
   test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # https://zenn.dev/mierune/articles/2af7b9e447712a
       - uses: chetan/git-restore-mtime-action@v2
       - uses: extractions/setup-just@v3
@@ -53,7 +53,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           cache: "pnpm"
           cache-dependency-path: ./renderer/pnpm-lock.yaml
@@ -86,7 +86,9 @@ jobs:
     needs: ["check", "test"]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       # https://zenn.dev/mierune/articles/2af7b9e447712a
       - uses: chetan/git-restore-mtime-action@v2
       - uses: extractions/setup-just@v3
@@ -96,7 +98,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           cache: "pnpm"
           cache-dependency-path: ./renderer/pnpm-lock.yaml
@@ -108,13 +110,14 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: dioxus-cli@${{ steps.dx-version.outputs.version }}
-      - name: Apply version
+      - name: Set package version for DMG filename
         if: ${{ github.event_name == 'release' }}
         run: |
-          sed -i '' "s/^version = \"0.0.0\"/version = \"${{ github.event.release.tag_name }}\"/" desktop/Cargo.toml
-          sed -i '' "s/^version = \"v\(.*\)\"/version = \"\1\"/" desktop/Cargo.toml
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          sed -i '' "s/^version = \"0.0.0\"/version = \"${VERSION}\"/" desktop/Cargo.toml
       - run: just build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: arto-${{ runner.os }}
           path: |
@@ -127,12 +130,14 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: nixbuild/nix-quick-install-action@v34
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
-      - uses: nix-community/cache-nix-action@v6
+      - uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
@@ -142,13 +147,10 @@ jobs:
           purge-created: 0
           purge-last-accessed: 604800
           purge-primary-key: never
-      - name: Apply version
-        if: ${{ github.event_name == 'release' }}
+      - name: Write version file
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
-          sed -i '' "s/^version = \"0.0.0\"/version = \"${VERSION}\"/" desktop/Cargo.toml
-          sed -i '' "/^name = \"arto\"$/{n;s/^version = \"0.0.0\"/version = \"${VERSION}\"/;}" desktop/Cargo.lock
+          VERSION=$(git describe --tags --always)
+          echo "${VERSION#v}" > desktop/VERSION
       - run: nix build
     timeout-minutes: 30
 
@@ -159,8 +161,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
         with:
           path: ./artifacts
       - run: find .
@@ -260,7 +262,7 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "SHA256=${SHA256}" >> $GITHUB_ENV
       - name: Dispatch to Homebrew tap
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ secrets.REPOSITORY_DISPATCH_TOKEN }}
           repository: arto-app/homebrew-tap

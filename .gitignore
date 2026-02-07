@@ -4,3 +4,6 @@ dist/
 /result
 node_modules/
 .direnv/
+
+# Build-generated version file (CI only)
+desktop/VERSION

@@ -23,7 +23,7 @@ use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::prelude::*;
 
 const VERSION: &str = concat!(
-    env!("CARGO_PKG_VERSION"),
+    env!("ARTO_BUILD_VERSION"),
     " (",
     compile_time::datetime_str!(),
     ")",
