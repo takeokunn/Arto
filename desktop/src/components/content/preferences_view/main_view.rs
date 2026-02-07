@@ -208,14 +208,14 @@ pub fn PreferencesView() -> Element {
                             SidebarTab {
                                 config,
                                 has_changes,
-                                current_sidebar_width: state.sidebar.read().width,
+                                state,
                             }
                         },
                         PreferencesTab::RightSidebar => rsx! {
                             RightSidebarTab {
                                 config,
                                 has_changes,
-                                current_right_sidebar_width: *state.right_sidebar_width.read(),
+                                state,
                             }
                         },
                         PreferencesTab::Directory => rsx! {

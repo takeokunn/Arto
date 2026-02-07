@@ -1,19 +1,45 @@
 use super::super::form_controls::{OptionCardItem, OptionCards, SliderInput};
 use crate::config::{Config, NewWindowBehavior, StartupBehavior};
+use crate::state::AppState;
 use dioxus::prelude::*;
 
 #[component]
 pub fn SidebarTab(
     config: Signal<Config>,
     has_changes: Signal<bool>,
-    current_sidebar_width: f64,
+    mut state: AppState,
 ) -> Element {
     // Extract values upfront to avoid holding read guard across closures
-    let sidebar = config.read().sidebar.clone();
+    let sidebar_cfg = config.read().sidebar.clone();
+    let current_width = state.sidebar.read().width;
+    let current_zoom = state.sidebar.read().zoom_level;
 
     rsx! {
         div {
             class: "preferences-pane",
+
+            h3 { class: "preference-section-title", "Current Settings" }
+
+            div {
+                class: "preference-item",
+                div {
+                    class: "preference-item-header",
+                    label { "Current Zoom Level" }
+                    p { class: "preference-description", "The zoom level for the current window's sidebar." }
+                }
+                SliderInput {
+                    value: current_zoom,
+                    min: 0.5,
+                    max: 2.0,
+                    step: 0.1,
+                    unit: "x".to_string(),
+                    decimals: 1,
+                    on_change: move |new_zoom| {
+                        state.sidebar.write().zoom_level = new_zoom;
+                    },
+                    default_value: Some(sidebar_cfg.default_zoom_level),
+                }
+            }
 
             h3 { class: "preference-section-title", "Default Settings" }
 
@@ -40,7 +66,7 @@ pub fn SidebarTab(
                             description: Some("Sidebar open by default".to_string()),
                         },
                     ],
-                    selected: sidebar.default_open,
+                    selected: sidebar_cfg.default_open,
                     on_change: move |new_state| {
                         config.write().sidebar.default_open = new_state;
                         has_changes.set(true);
@@ -56,7 +82,7 @@ pub fn SidebarTab(
                     p { class: "preference-description", "The default sidebar width in pixels." }
                 }
                 SliderInput {
-                    value: sidebar.default_width,
+                    value: sidebar_cfg.default_width,
                     min: 200.0,
                     max: 600.0,
                     step: 10.0,
@@ -65,7 +91,29 @@ pub fn SidebarTab(
                         config.write().sidebar.default_width = new_width;
                         has_changes.set(true);
                     },
-                    current_value: Some(current_sidebar_width),
+                    current_value: Some(current_width),
+                }
+            }
+
+            div {
+                class: "preference-item",
+                div {
+                    class: "preference-item-header",
+                    label { "Default Zoom Level" }
+                    p { class: "preference-description", "The default zoom level applied to the sidebar content." }
+                }
+                SliderInput {
+                    value: sidebar_cfg.default_zoom_level,
+                    min: 0.5,
+                    max: 2.0,
+                    step: 0.1,
+                    unit: "x".to_string(),
+                    decimals: 1,
+                    on_change: move |new_zoom| {
+                        config.write().sidebar.default_zoom_level = new_zoom;
+                        has_changes.set(true);
+                    },
+                    current_value: Some(current_zoom),
                 }
             }
 
@@ -92,7 +140,7 @@ pub fn SidebarTab(
                             description: Some("Show all file types".to_string()),
                         },
                     ],
-                    selected: sidebar.default_show_all_files,
+                    selected: sidebar_cfg.default_show_all_files,
                     on_change: move |new_state| {
                         config.write().sidebar.default_show_all_files = new_state;
                         has_changes.set(true);
@@ -125,7 +173,7 @@ pub fn SidebarTab(
                             description: Some("Resume from last closed window".to_string()),
                         },
                     ],
-                    selected: sidebar.on_startup,
+                    selected: sidebar_cfg.on_startup,
                     on_change: move |new_behavior| {
                         config.write().sidebar.on_startup = new_behavior;
                         has_changes.set(true);
@@ -156,7 +204,7 @@ pub fn SidebarTab(
                             description: Some("Same as current window".to_string()),
                         },
                     ],
-                    selected: sidebar.on_new_window,
+                    selected: sidebar_cfg.on_new_window,
                     on_change: move |new_behavior| {
                         config.write().sidebar.on_new_window = new_behavior;
                         has_changes.set(true);
