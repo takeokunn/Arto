@@ -166,79 +166,90 @@ jobs:
         with:
           path: ./artifacts
       - run: find .
+      - name: Build release body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Get existing release notes and append installation instructions
+          gh release view "${{ github.event.release.tag_name }}" --json body -q .body > release_body.md
+          cat >> release_body.md << BODY_EOF
+
+          ---
+
+          ## macOS Installation
+
+          ### Installation Steps (2 Security Approvals Required)
+
+          Due to Apple's security requirements, you'll need to approve **both the DMG file and the app itself**.
+
+          #### Step 1: Open the DMG File
+
+          1. **Download** the \`Arto_*.dmg\` file from the Assets section below
+          2. **Double-click the DMG file**
+             - Security warning appears: *"Apple cannot verify that this disk image does not contain malware"*
+             - Click "OK" to dismiss
+          3. **Open System Settings**
+             - Apple menu () → System Settings → Privacy & Security
+          4. **Allow the DMG** (in Security section at bottom)
+             - You'll see: *"Arto_*.dmg" was blocked from use*
+             - Click **"Open Anyway"** button
+             - Enter your password
+             - The DMG will now open
+
+          #### Step 2: Install and Open the App
+
+          5. **Copy the app**
+             - Drag **Arto.app** from the DMG to your **Applications** folder
+          6. **Double-click Arto.app** to launch
+             - Security warning appears again: *"Arto cannot be opened because..."*
+             - Click "OK" to dismiss
+          7. **Allow the app** (same process as DMG)
+             - Open System Settings → Privacy & Security
+             - Scroll to Security section
+             - Find: *"Arto" was blocked from use*
+             - Click **"Open Anyway"**
+             - Enter your password
+          8. **Launch complete**
+             - Arto will now start normally
+             - Future launches won't require approval
+
+          ### Why Two Approvals Are Needed
+
+          macOS treats the DMG container and the app inside separately. Since both are unsigned,
+          each requires manual approval through System Settings. This is standard macOS security
+          for applications without Apple Developer ID certificates.
+
+          ### Quick Method (Terminal - for advanced users)
+
+          \`\`\`bash
+          # Remove quarantine from DMG
+          xattr -d com.apple.quarantine Arto_*.dmg
+          open Arto_*.dmg
+
+          # After copying to Applications, remove quarantine from app
+          xattr -cr /Applications/Arto.app
+          open /Applications/Arto.app
+          \`\`\`
+
+          ### Note for macOS Sequoia (15.0+) Users
+
+          The right-click → "Open" shortcut no longer works for unsigned apps.
+          You must use System Settings → Privacy & Security as described above.
+
+          ---
+
+          For more information, see the [README](https://github.com/${REPO}).
+          BODY_EOF
       - uses: ncipollo/release-action@v1.20.0
         with:
           tag: ${{ github.event.release.tag_name }}
           allowUpdates: true
-          appendBody: true
           artifactErrorsFailBuild: true
           artifacts: ./artifacts/**/Arto_*.dmg
           removeArtifacts: true
           makeLatest: true
-          body: |
-            ## macOS Installation
-
-            ### Installation Steps (2 Security Approvals Required)
-
-            Due to Apple's security requirements, you'll need to approve **both the DMG file and the app itself**.
-
-            #### Step 1: Open the DMG File
-
-            1. **Download** the `Arto_*.dmg` file from the Assets section below
-            2. **Double-click the DMG file**
-               - Security warning appears: *"Apple cannot verify that this disk image does not contain malware"*
-               - Click "OK" to dismiss
-            3. **Open System Settings**
-               - Apple menu () → System Settings → Privacy & Security
-            4. **Allow the DMG** (in Security section at bottom)
-               - You'll see: *"Arto_*.dmg" was blocked from use*
-               - Click **"Open Anyway"** button
-               - Enter your password
-               - The DMG will now open
-
-            #### Step 2: Install and Open the App
-
-            5. **Copy the app**
-               - Drag **Arto.app** from the DMG to your **Applications** folder
-            6. **Double-click Arto.app** to launch
-               - Security warning appears again: *"Arto cannot be opened because..."*
-               - Click "OK" to dismiss
-            7. **Allow the app** (same process as DMG)
-               - Open System Settings → Privacy & Security
-               - Scroll to Security section
-               - Find: *"Arto" was blocked from use*
-               - Click **"Open Anyway"**
-               - Enter your password
-            8. **Launch complete**
-               - Arto will now start normally
-               - Future launches won't require approval
-
-            ### Why Two Approvals Are Needed
-
-            macOS treats the DMG container and the app inside separately. Since both are unsigned,
-            each requires manual approval through System Settings. This is standard macOS security
-            for applications without Apple Developer ID certificates.
-
-            ### Quick Method (Terminal - for advanced users)
-
-            ```bash
-            # Remove quarantine from DMG
-            xattr -d com.apple.quarantine Arto_*.dmg
-            open Arto_*.dmg
-
-            # After copying to Applications, remove quarantine from app
-            xattr -cr /Applications/Arto.app
-            open /Applications/Arto.app
-            ```
-
-            ### Note for macOS Sequoia (15.0+) Users
-
-            The right-click → "Open" shortcut no longer works for unsigned apps.
-            You must use System Settings → Privacy & Security as described above.
-
-            ---
-
-            For more information, see the [README](https://github.com/${{ github.repository }}).
+          bodyFile: release_body.md
 
   dispatch:
     if: ${{ github.event_name == 'release' }}
