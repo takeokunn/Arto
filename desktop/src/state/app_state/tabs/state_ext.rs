@@ -484,8 +484,8 @@ impl AppState {
         // Only update active_tab if we toggled the currently active tab
         if index == current_active {
             self.active_tab.set(new_index);
-        } else if current_active != new_index {
-            // Adjust current active tab index if the toggle shifted it
+        } else {
+            // Adjust current active tab index based on remove/insert effects
             let adjusted_active = if index < current_active && new_index >= current_active {
                 // Tab moved from before to at-or-after current → shift current left
                 current_active.saturating_sub(1)
