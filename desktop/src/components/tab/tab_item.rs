@@ -21,6 +21,10 @@ pub fn TabItem(
     let tab_name = tab.display_name();
     let transferable = is_tab_transferable(&tab.content);
     let file_path = tab.file().map(|p| p.to_path_buf());
+    let is_pinned = tab.pinned;
+
+    let mut show_tooltip = use_signal(|| false);
+    let mut tooltip_position = use_signal(|| (0i32, 0i32));
 
     let mut show_context_menu = use_signal(|| false);
     let mut context_menu_position = use_signal(|| (0, 0));
@@ -93,6 +97,30 @@ pub fn TabItem(
         );
 
         show_context_menu.set(true);
+    };
+
+    // Handler for "Close"
+    let handle_close_tab = move |_| {
+        state.close_tab(index);
+        show_context_menu.set(false);
+    };
+
+    // Handler for "Close Others"
+    let handle_close_others = move |_| {
+        state.close_others(index);
+        show_context_menu.set(false);
+    };
+
+    // Handler for "Close All"
+    let handle_close_all = move |_| {
+        state.close_all_unpinned();
+        show_context_menu.set(false);
+    };
+
+    // Handler for "Pin Tab" / "Unpin Tab"
+    let handle_toggle_pin = move |_| {
+        state.toggle_pin(index);
+        show_context_menu.set(false);
     };
 
     // Handler for "Open in New Window"
@@ -188,6 +216,7 @@ pub fn TabItem(
         div {
             class: "tab {shift_class_str}",
             class: if is_active { "active" },
+            class: if is_pinned { "pinned" },
             onpointerdown: handle_pointerdown,
             onclick: move |_| {
                 // Only switch tab if not in a drag operation
@@ -196,23 +225,59 @@ pub fn TabItem(
                 }
             },
             oncontextmenu: handle_context_menu,
+            onmouseenter: move |_| {
+                spawn(async move {
+                    let mounted_data = tab_element.read().clone();
+                    if let Some(ref mounted) = mounted_data {
+                        if let Ok(rect) = mounted.get_client_rect().await {
+                            let x = (rect.origin.x + rect.size.width / 2.0) as i32;
+                            let y = (rect.origin.y + rect.size.height) as i32 + 4;
+                            tooltip_position.set((x, y));
+                            show_tooltip.set(true);
+                        }
+                    }
+                });
+            },
+            onmouseleave: move |_| show_tooltip.set(false),
             onmounted: move |evt| {
                 // Store mounted data for accurate grab_offset calculation
                 tab_element.set(Some(evt.data()));
             },
+
+            // Pin indicator
+            if is_pinned {
+                Icon { name: IconName::Pin, size: 12, class: "tab-pin-icon" }
+            }
 
             span {
                 class: "tab-name",
                 "{tab_name}"
             }
 
-            button {
-                class: "tab-close",
-                onclick: move |evt| {
-                    evt.stop_propagation();
-                    state.close_tab(index);
-                },
-                Icon { name: IconName::Close, size: 14 }
+            // Close button (hidden for pinned tabs)
+            if !is_pinned {
+                button {
+                    class: "tab-close",
+                    onclick: move |evt| {
+                        evt.stop_propagation();
+                        state.close_tab(index);
+                    },
+                    Icon { name: IconName::Close, size: 14 }
+                }
+            }
+        }
+
+        // Tooltip (position: fixed to escape tab-bar overflow clipping)
+        if *show_tooltip.read() && !*show_context_menu.read() {
+            {
+                let (tx, ty) = *tooltip_position.read();
+                rsx! {
+                    div {
+                        class: "tab-tooltip",
+                        style: "left: {tx}px; top: {ty}px;",
+                        "{tab_name}"
+                    }
+                }
             }
         }
 
@@ -220,7 +285,12 @@ pub fn TabItem(
             TabContextMenu {
                 position: *context_menu_position.read(),
                 file_path: file_path.clone(),
+                is_pinned: is_pinned,
                 on_close: move |_| show_context_menu.set(false),
+                on_close_tab: handle_close_tab,
+                on_close_others: handle_close_others,
+                on_close_all: handle_close_all,
+                on_toggle_pin: handle_toggle_pin,
                 on_copy_path: handle_copy_path,
                 on_reload: handle_reload,
                 on_set_parent_as_root: handle_set_parent_as_root,

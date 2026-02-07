@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct Tab {
     pub content: TabContent,
     pub history: HistoryManager,
+    pub pinned: bool,
 }
 
 impl Tab {
@@ -15,7 +16,11 @@ impl Tab {
         let mut history = HistoryManager::new();
         history.push(file.clone());
         let content = TabContent::File(file);
-        Self { content, history }
+        Self {
+            content,
+            history,
+            pinned: false,
+        }
     }
 
     pub fn with_inline_content(content: impl Into<String>) -> Self {
@@ -23,6 +28,7 @@ impl Tab {
         Self {
             content: TabContent::Inline(content),
             history: HistoryManager::new(),
+            pinned: false,
         }
     }
 
@@ -225,5 +231,27 @@ mod tests {
     fn test_display_name_hidden_file() {
         let tab = Tab::new("/path/to/.hidden.md");
         assert_eq!(tab.display_name(), ".hidden.md");
+    }
+
+    // === Pinned tests ===
+
+    #[test]
+    fn test_tab_default_not_pinned() {
+        let tab = Tab::default();
+        assert!(!tab.pinned);
+    }
+
+    #[test]
+    fn test_tab_new_not_pinned() {
+        let tab = Tab::new("/test.md");
+        assert!(!tab.pinned);
+    }
+
+    #[test]
+    fn test_tab_pinned_affects_equality() {
+        let tab1 = Tab::new("/test.md");
+        let mut tab2 = Tab::new("/test.md");
+        tab2.pinned = true;
+        assert_ne!(tab1, tab2);
     }
 }

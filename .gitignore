@@ -3,6 +3,7 @@ target/
 dist/
 /result
 node_modules/
+package-lock.json
 .direnv/
 
 # Build-generated version file (CI only)

@@ -67,6 +67,23 @@
   background: var(--bg-secondary);
 }
 
+/* Tab tooltip (position: fixed to escape tab-bar overflow clipping) */
+.tab-tooltip {
+  position: fixed;
+  transform: translateX(-50%);
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: var(--z-dropdown);
+}
+
 .tab.active {
   color: var(--text-color);
   opacity: 1;
@@ -77,6 +94,37 @@
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   Pinned Tab Styles
+   ========================================================================== */
+
+.tab.pinned {
+  /* Keep the same fixed width as .tab to stay in sync with TAB_WIDTH in
+   * desktop/src/drag.rs. Adjust only internal layout (padding, content
+   * max-width) for visual differences. */
+  padding: 8px 10px;
+}
+
+.tab.pinned .tab-name {
+  max-width: 50px;
+}
+
+.tab-pin-icon {
+  opacity: var(--opacity-muted);
+  flex-shrink: 0;
+}
+
+.tab.pinned.active .tab-pin-icon {
+  opacity: var(--opacity-hover);
+}
+
+/* Visual separator between pinned and unpinned groups */
+.tab.pinned + .tab:not(.pinned) {
+  margin-left: 4px;
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
 }
 
 .tab-close {

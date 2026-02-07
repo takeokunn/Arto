@@ -9,7 +9,12 @@ use crate::components::icon::{Icon, IconName};
 pub fn TabContextMenu(
     position: (i32, i32),
     file_path: Option<PathBuf>,
+    is_pinned: bool,
     on_close: EventHandler<()>,
+    on_close_tab: EventHandler<()>,
+    on_close_others: EventHandler<()>,
+    on_close_all: EventHandler<()>,
+    on_toggle_pin: EventHandler<()>,
     on_copy_path: EventHandler<()>,
     on_reload: EventHandler<()>,
     on_set_parent_as_root: EventHandler<()>,
@@ -35,7 +40,36 @@ pub fn TabContextMenu(
             style: "left: {position.0}px; top: {position.1}px;",
             onclick: move |evt| evt.stop_propagation(),
 
-            // === Section 1: Window operations ===
+            // === Section 1: Close operations ===
+            ContextMenuItem {
+                label: "Close",
+                icon: Some(IconName::Close),
+                disabled: is_pinned,
+                on_click: move |_| on_close_tab.call(()),
+            }
+
+            ContextMenuItem {
+                label: "Close Others",
+                on_click: move |_| on_close_others.call(()),
+            }
+
+            ContextMenuItem {
+                label: "Close All",
+                on_click: move |_| on_close_all.call(()),
+            }
+
+            // === Section 2: Pin ===
+            ContextMenuSeparator {}
+
+            ContextMenuItem {
+                label: if is_pinned { "Unpin Tab" } else { "Pin Tab" },
+                icon: Some(if is_pinned { IconName::PinnedOff } else { IconName::Pin }),
+                on_click: move |_| on_toggle_pin.call(()),
+            }
+
+            // === Section 3: Window operations ===
+            ContextMenuSeparator {}
+
             ContextMenuItem {
                 label: "Open in New Window",
                 disabled: disabled,
@@ -84,7 +118,7 @@ pub fn TabContextMenu(
                 }
             }
 
-            // === Section 2: File operations ===
+            // === Section 4: File operations ===
             ContextMenuSeparator {}
 
             ContextMenuItem {
@@ -101,7 +135,7 @@ pub fn TabContextMenu(
                 on_click: move |_| on_reveal_in_finder.call(()),
             }
 
-            // === Section 3: Tab operations ===
+            // === Section 5: Tab operations ===
             ContextMenuSeparator {}
 
             ContextMenuItem {
@@ -127,7 +161,8 @@ pub fn TabContextMenu(
 
 #[derive(Props, Clone, PartialEq)]
 struct ContextMenuItemProps {
-    label: &'static str,
+    #[props(into)]
+    label: String,
     #[props(default)]
     icon: Option<IconName>,
     #[props(default = false)]
