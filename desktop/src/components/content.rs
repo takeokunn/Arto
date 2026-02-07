@@ -37,7 +37,10 @@ pub fn Content() -> Element {
     let content = use_memo(move || state.current_tab().map(|tab| tab.content));
 
     // Use CSS zoom property for vector-based scaling (not transform: scale)
-    // This ensures fonts and images remain sharp at any zoom level
+    // This ensures fonts and images remain sharp at any zoom level.
+    // Applied to a wrapper INSIDE the scroll container (.content) rather than
+    // on .content itself, because zoom on a scroll container causes WebKit to
+    // miscalculate scrollHeight, producing extra blank space at the bottom.
     let zoom_style = format!("zoom: {};", zoom_level());
 
     // Set up scroll position tracking via JavaScript
@@ -46,27 +49,31 @@ pub fn Content() -> Element {
     rsx! {
         div {
             class: "content",
-            style: "{zoom_style}",
 
-            match content() {
-                Some(TabContent::File(file)) => {
-                    rsx! { FileViewer { file } }
-                },
-                Some(TabContent::Inline(markdown)) => {
-                    rsx! { InlineViewer { markdown } }
-                },
-                Some(TabContent::FileError(file, error)) => {
-                    let filename = file
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("Unknown file")
-                        .to_string();
-                    rsx! { FileErrorView { filename, error_message: error } }
-                },
-                Some(TabContent::Preferences) => {
-                    rsx! { PreferencesView {} }
-                },
-                _ => rsx! { NoFileView {} },
+            // Apply zoom wrapper to all content (user content gets zoomed, system UI doesn't need it but wrapper is harmless)
+            div {
+                style: "{zoom_style}",
+
+                match content() {
+                    Some(TabContent::File(file)) => {
+                        rsx! { FileViewer { file } }
+                    },
+                    Some(TabContent::Inline(markdown)) => {
+                        rsx! { InlineViewer { markdown } }
+                    },
+                    Some(TabContent::FileError(file, error)) => {
+                        let filename = file
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("Unknown file")
+                            .to_string();
+                        rsx! { FileErrorView { filename, error_message: error } }
+                    },
+                    Some(TabContent::Preferences) => {
+                        rsx! { PreferencesView {} }
+                    },
+                    _ => rsx! { NoFileView {} },
+                }
             }
         }
     }
