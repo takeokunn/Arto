@@ -13,7 +13,7 @@ mod zoom_config;
 pub use behavior::{NewWindowBehavior, StartupBehavior};
 pub use directory_config::DirectoryConfig;
 pub use right_sidebar_config::{RightSidebarConfig, DEFAULT_RIGHT_SIDEBAR_WIDTH};
-pub use sidebar_config::SidebarConfig;
+pub use sidebar_config::{normalize_zoom_level, SidebarConfig};
 pub use theme_config::ThemeConfig;
 pub use window_dimension::{WindowDimension, WindowDimensionUnit};
 pub use window_position_config::{
