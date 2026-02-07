@@ -170,6 +170,7 @@ jobs:
         with:
           tag: ${{ github.event.release.tag_name }}
           allowUpdates: true
+          appendBody: true
           artifactErrorsFailBuild: true
           artifacts: ./artifacts/**/Arto_*.dmg
           removeArtifacts: true
