@@ -281,6 +281,14 @@ fn get_cmd_or_ctrl(code: Code, additional: Option<Modifiers>) -> Accelerator {
     Accelerator::new(Some(modifiers), code)
 }
 
+/// Check if a menu event is a close action (Close Tab or Close Window)
+pub fn is_close_action(event: &MenuEvent) -> bool {
+    matches!(
+        MenuId::from_str(event.id().0.as_ref()),
+        Some(MenuId::CloseTab | MenuId::CloseWindow)
+    )
+}
+
 /// Handle menu events that don't require app state
 pub fn handle_menu_event_global(event: &MenuEvent) -> bool {
     let menu_id = event.id().0.as_ref();
