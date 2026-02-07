@@ -31,42 +31,51 @@ pub fn RightSidebar(props: RightSidebarProps) -> Element {
     let is_open = *state.right_sidebar_open.read();
     let width = *state.right_sidebar_width.read();
     let active_tab = *state.right_sidebar_tab.read();
+    let zoom_level = state.zoom_level;
     let is_resizing = use_signal(|| false);
 
     // Get data for each tab
     let headings = props.headings.clone();
 
-    let style = if is_open {
+    let outer_style = if is_open {
         format!("width: {}px;", width)
     } else {
         "width: 0;".to_string()
     };
+
+    let inner_style = format!("zoom: {};", zoom_level());
 
     rsx! {
         div {
             class: "right-sidebar",
             class: if is_open { "visible" },
             class: if is_resizing() { "resizing" },
-            style: "{style}",
+            style: "{outer_style}",
 
             // Resize handle
             if is_open {
                 RightSidebarResizeHandle { is_resizing }
             }
 
-            // Tab bar
-            TabBar {
-                active_tab,
-                on_change: move |tab| state.set_right_sidebar_tab(tab),
-            }
-
-            // Tab content
+            // Inner wrapper with zoom applied
             div {
-                class: "right-sidebar-content",
+                class: "right-sidebar-inner",
+                style: "{inner_style}",
 
-                match active_tab {
-                    RightSidebarTab::Contents => rsx! { ContentsTab { headings } },
-                    RightSidebarTab::Search => rsx! { SearchTab {} },
+                // Tab bar
+                TabBar {
+                    active_tab,
+                    on_change: move |tab| state.set_right_sidebar_tab(tab),
+                }
+
+                // Tab content
+                div {
+                    class: "right-sidebar-content",
+
+                    match active_tab {
+                        RightSidebarTab::Contents => rsx! { ContentsTab { headings } },
+                        RightSidebarTab::Search => rsx! { SearchTab {} },
+                    }
                 }
             }
         }

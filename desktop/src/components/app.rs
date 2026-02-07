@@ -41,6 +41,7 @@ pub fn App(
     toc_open: bool,
     toc_width: f64,
     toc_tab: RightSidebarTab,
+    zoom_level: f64,
 ) -> Element {
     // Initialize application state with the provided tab
     let mut state = use_context_provider(|| {
@@ -65,6 +66,9 @@ pub fn App(
             app_state.right_sidebar_width.set(toc_width);
             app_state.right_sidebar_tab.set(toc_tab);
         }
+
+        // Apply initial zoom level from params
+        app_state.zoom_level.set(zoom_level);
 
         let metrics = crate::window::metrics::capture_window_metrics(&window().window);
         *app_state.position.write() = LogicalPosition::new(metrics.position.x, metrics.position.y);
@@ -763,6 +767,7 @@ fn compute_detach_transition(
                     directory: state.sidebar.read().root_directory.clone(),
                     sidebar: state.sidebar.read().clone(),
                     theme: *state.current_theme.read(),
+                    zoom_level: *state.zoom_level.read(),
                     size: win.inner_size().to_logical::<u32>(win.scale_factor()),
                 });
                 (DetachState::Creating, None)
@@ -812,6 +817,7 @@ struct PreviewWindowParams {
     directory: Option<std::path::PathBuf>,
     sidebar: crate::state::Sidebar,
     theme: crate::theme::Theme,
+    zoom_level: f64,
     size: dioxus::desktop::tao::dpi::LogicalSize<u32>,
 }
 
@@ -832,6 +838,7 @@ fn spawn_preview_window_creation(params: PreviewWindowParams) {
             sidebar_width: params.sidebar.width,
             sidebar_show_all_files: params.sidebar.show_all_files,
             theme: params.theme,
+            zoom_level: params.zoom_level,
             size: params.size,
             ..Default::default()
         };

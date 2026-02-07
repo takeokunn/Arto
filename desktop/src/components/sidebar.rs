@@ -14,23 +14,32 @@ pub fn Sidebar() -> Element {
     let is_visible = sidebar_state.open;
     let width = sidebar_state.width;
 
+    let zoom_level = state.zoom_level;
     let mut is_resizing = use_signal(|| false);
 
-    let style = if is_visible {
+    let outer_style = if is_visible {
         format!("width: {}px;", width)
     } else {
         "width: 0;".to_string()
     };
+
+    let inner_style = format!("zoom: {};", zoom_level());
 
     rsx! {
         div {
             class: "left-sidebar",
             class: if is_visible { "visible" },
             class: if is_resizing() { "resizing" },
-            style: "{style}",
+            style: "{outer_style}",
 
-            // File explorer content (always mounted for animation)
-            file_explorer::FileExplorer {}
+            // Inner wrapper with zoom applied
+            div {
+                class: "left-sidebar-inner",
+                style: "{inner_style}",
+
+                // File explorer content (always mounted for animation)
+                file_explorer::FileExplorer {}
+            }
 
             // Resize handle (only when visible)
             if is_visible {

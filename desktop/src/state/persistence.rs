@@ -58,6 +58,12 @@ pub struct PersistedState {
     pub right_sidebar_tab: RightSidebarTab,
     pub window_position: Position,
     pub window_size: Size,
+    #[serde(default = "default_zoom_level")]
+    pub zoom_level: f64,
+}
+
+fn default_zoom_level() -> f64 {
+    1.0
 }
 
 impl Default for PersistedState {
@@ -73,6 +79,7 @@ impl Default for PersistedState {
             right_sidebar_tab: RightSidebarTab::default(),
             window_position: Position::default(),
             window_size: Size::default(),
+            zoom_level: 1.0,
         }
     }
 }
@@ -91,6 +98,7 @@ impl From<&AppState> for PersistedState {
             right_sidebar_tab: *state.right_sidebar_tab.read(),
             window_position: (*state.position.read()).into(),
             window_size: (*state.size.read()).into(),
+            zoom_level: *state.zoom_level.read(),
         }
     }
 }
@@ -144,6 +152,7 @@ impl PersistedState {
             right_sidebar_open = self.right_sidebar_open,
             right_sidebar_width = self.right_sidebar_width,
             right_sidebar_tab = ?self.right_sidebar_tab,
+            zoom_level = self.zoom_level,
             "Saving persisted state"
         );
 

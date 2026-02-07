@@ -16,6 +16,16 @@ use crate::window::main::get_last_focused_window_state;
 const MIN_WINDOW_DIMENSION: f64 = 100.0;
 
 // ============================================================================
+// Zoom Helpers
+// ============================================================================
+
+/// Normalize zoom level to the nearest 0.1 step to prevent precision drift
+/// and ensure consistent behavior with menu zoom in/out actions.
+pub fn normalize_zoom_level(zoom: f64) -> f64 {
+    ((zoom * 10.0).round() / 10.0).clamp(0.5, 5.0)
+}
+
+// ============================================================================
 // Preference Types
 // ============================================================================
 
@@ -45,6 +55,10 @@ pub struct WindowSizePreference {
 
 pub struct WindowPositionPreference {
     pub position: LogicalPosition<i32>,
+}
+
+pub struct ZoomPreference {
+    pub zoom_level: f64,
 }
 
 // ============================================================================
@@ -315,6 +329,25 @@ pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
     )
 }
 
+pub fn get_zoom_preference(is_first_window: bool) -> ZoomPreference {
+    let cfg = CONFIG.read();
+    let zoom_level = choose_by_behavior(
+        is_first_window,
+        cfg.zoom.on_startup,
+        cfg.zoom.on_new_window,
+        || cfg.zoom.default_zoom_level,
+        || {
+            get_last_focused_window_state()
+                .map(|state| *state.zoom_level.read())
+                .unwrap_or_else(|| PersistedState::load().zoom_level)
+        },
+    );
+    // Normalize to 0.1 step grid and clamp to safe range
+    ZoomPreference {
+        zoom_level: normalize_zoom_level(zoom_level),
+    }
+}
+
 pub fn get_window_size_preference(is_first_window: bool) -> WindowSizePreference {
     let (_, _, size) = resolve_window_settings(is_first_window);
     let (_, screen_size) = get_current_display_bounds()
@@ -419,6 +452,18 @@ mod tests {
     }
 
     #[test]
+    fn test_get_zoom_preference_first_window() {
+        let result = get_zoom_preference(true);
+        assert!(result.zoom_level > 0.0);
+    }
+
+    #[test]
+    fn test_get_zoom_preference_new_window() {
+        let result = get_zoom_preference(false);
+        assert!(result.zoom_level > 0.0);
+    }
+
+    #[test]
     fn test_get_window_size_preference_first_window() {
         let result = get_window_size_preference(true);
         assert!(result.size.width > 0);
@@ -520,5 +565,27 @@ mod tests {
         let resolved = resolve_window_size(size, LogicalSize::new(1200, 900));
         assert_eq!(resolved.width, 1200);
         assert_eq!(resolved.height, 900);
+    }
+
+    #[test]
+    fn test_normalize_zoom_level_rounds_to_nearest_tenth() {
+        assert_eq!(normalize_zoom_level(1.05), 1.1);
+        assert_eq!(normalize_zoom_level(1.04), 1.0);
+        assert_eq!(normalize_zoom_level(1.95), 2.0);
+        assert_eq!(normalize_zoom_level(0.99), 1.0);
+    }
+
+    #[test]
+    fn test_normalize_zoom_level_clamps_to_range() {
+        assert_eq!(normalize_zoom_level(0.3), 0.5);
+        assert_eq!(normalize_zoom_level(10.0), 5.0);
+        assert_eq!(normalize_zoom_level(-1.0), 0.5);
+    }
+
+    #[test]
+    fn test_normalize_zoom_level_preserves_aligned_values() {
+        assert_eq!(normalize_zoom_level(1.0), 1.0);
+        assert_eq!(normalize_zoom_level(1.5), 1.5);
+        assert_eq!(normalize_zoom_level(2.0), 2.0);
     }
 }
