@@ -8,7 +8,18 @@ fn main() {
         }
     }
 
-    // 2. Try git describe (works in dev and CI macOS)
+    // 2. Try VERSION file (used by CI and Nix builds to override git describe)
+    println!("cargo:rerun-if-changed=VERSION");
+    if let Ok(v) = std::fs::read_to_string("VERSION") {
+        let v = v.trim();
+        let v = v.strip_prefix('v').unwrap_or(v);
+        if !v.is_empty() {
+            println!("cargo:rustc-env=ARTO_BUILD_VERSION={v}");
+            return;
+        }
+    }
+
+    // 3. Try git describe (works in dev and CI macOS)
     if let Ok(output) = std::process::Command::new("git")
         .args(["describe", "--tags", "--always", "--dirty"])
         .output()
@@ -22,16 +33,6 @@ fn main() {
             println!("cargo:rerun-if-changed=.git/HEAD");
             println!("cargo:rerun-if-changed=.git/refs/tags");
             println!("cargo:rerun-if-changed=.git/packed-refs");
-            return;
-        }
-    }
-
-    // 3. Try VERSION file (legacy fallback)
-    println!("cargo:rerun-if-changed=VERSION");
-    if let Ok(v) = std::fs::read_to_string("VERSION") {
-        let v = v.trim();
-        if !v.is_empty() {
-            println!("cargo:rustc-env=ARTO_BUILD_VERSION={v}");
             return;
         }
     }
