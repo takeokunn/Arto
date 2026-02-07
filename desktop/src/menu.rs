@@ -388,13 +388,13 @@ pub fn handle_menu_event_with_state(event: &MenuEvent, state: &mut AppState) -> 
         }
         MenuId::ZoomIn => {
             let current = *state.zoom_level.read();
-            // Max zoom: 10.0
-            state.zoom_level.set((current + 0.1).min(10.0));
+            let next = ((current + 0.1) * 10.0).round() / 10.0;
+            state.zoom_level.set(next.min(5.0));
         }
         MenuId::ZoomOut => {
             let current = *state.zoom_level.read();
-            // Min zoom: 0.1
-            state.zoom_level.set((current - 0.1).max(0.1));
+            let next = ((current - 0.1) * 10.0).round() / 10.0;
+            state.zoom_level.set(next.max(0.5));
         }
         MenuId::GoBack => {
             state.save_scroll_and_go_back();
