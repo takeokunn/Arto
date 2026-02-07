@@ -52,9 +52,9 @@ pub use child::{
     open_or_focus_mermaid_window,
 };
 pub use main::{
-    close_all_main_windows, create_main_window_config, create_new_main_window_with_empty,
-    create_new_main_window_with_file, has_any_main_windows, is_main_app_window_visible,
-    register_main_window, register_window_state, show_main_app_window, unregister_window_state,
+    close_all_main_windows, create_main_window_config, create_main_window_sync,
+    get_any_main_window, has_any_main_windows, is_main_app_window_visible, register_main_window,
+    register_window_state, show_main_app_window, unregister_window_state,
     update_last_focused_window, CreateMainWindowConfigParams,
 };
 pub use preview::{

@@ -1,4 +1,4 @@
-use dioxus::prelude::{spawn, ReadableExt, WritableExt};
+use dioxus::prelude::{ReadableExt, WritableExt};
 use dioxus_desktop::muda::accelerator::{Accelerator, Code, Modifiers};
 use dioxus_desktop::muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use dioxus_desktop::window;
@@ -284,7 +284,6 @@ fn get_cmd_or_ctrl(code: Code, additional: Option<Modifiers>) -> Accelerator {
 /// Handle menu events that don't require app state
 pub fn handle_menu_event_global(event: &MenuEvent) -> bool {
     let menu_id = event.id().0.as_ref();
-    tracing::info!("Global menu event: {}", menu_id);
 
     let id = match MenuId::from_str(menu_id) {
         Some(id) => id,
@@ -293,25 +292,25 @@ pub fn handle_menu_event_global(event: &MenuEvent) -> bool {
 
     match id {
         MenuId::NewWindow => {
-            spawn(async move {
-                window::create_new_main_window_with_empty(CreateMainWindowConfigParams::default())
-                    .await;
-            });
+            window::create_main_window_sync(
+                &window(),
+                crate::state::Tab::default(),
+                CreateMainWindowConfigParams::default(),
+            );
         }
         MenuId::NewTab => {
             if !window::has_any_main_windows() {
-                spawn(async move {
-                    window::create_new_main_window_with_empty(
-                        CreateMainWindowConfigParams::default(),
-                    )
-                    .await;
-                });
+                window::create_main_window_sync(
+                    &window(),
+                    crate::state::Tab::default(),
+                    CreateMainWindowConfigParams::default(),
+                );
                 return true;
             }
             return false;
         }
         MenuId::Preferences => {
-            // Preferences is now handled by state-based handler
+            // Declined here; requires per-window AppState access
             return false;
         }
         MenuId::CloseAllChildWindows => {

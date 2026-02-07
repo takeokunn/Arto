@@ -106,7 +106,7 @@ pub fn TabItem(
                     directory,
                     ..Default::default()
                 };
-                crate::window::main::create_new_main_window(tab, params).await;
+                crate::window::main::create_main_window(tab, params).await;
 
                 // Close tab in source window after new window is created
                 state.close_tab(index);

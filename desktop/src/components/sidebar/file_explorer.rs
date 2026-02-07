@@ -412,7 +412,7 @@ fn FileTreeNode(path: PathBuf, depth: usize, mut refresh_counter: Signal<u32>) -
                     directory,
                     ..Default::default()
                 };
-                crate::window::main::create_new_main_window(tab, params).await;
+                crate::window::main::create_main_window(tab, params).await;
             });
             show_context_menu.set(false);
         }

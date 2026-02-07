@@ -12,7 +12,9 @@
 //!                                                 ↓
 //!                                           accept connections
 //!                                                 ↓
-//!                                           recv JSON Lines → OPEN_EVENT_RECEIVER
+//!                                           recv JSON Lines → IPC_EVENT_QUEUE
+//!                                                 ↓
+//!                                           GCD wake → process_pending_events()
 //!
 //! 2nd Instance (Secondary):
 //!   main() → try_send_to_existing() succeeds → exit(0)
@@ -28,14 +30,169 @@
 //! {"type":"reopen"}
 //! ```
 
-use crate::components::main_app::OpenEvent;
 use interprocess::local_socket::{prelude::*, GenericFilePath, ListenerOptions, Stream, ToFsName};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
-use tokio::sync::mpsc::Sender;
+
+// ============================================================================
+// OpenEvent definition
+// ============================================================================
+
+/// Open event types for distinguishing files, directories, and reopen events.
+///
+/// Used to communicate between OS event handlers (main.rs custom_event_handler),
+/// IPC server (secondary instance), and the initial window setup (MainApp).
+#[derive(Debug, Clone)]
+pub enum OpenEvent {
+    /// File opened from Finder/CLI
+    File(PathBuf),
+    /// Directory opened from Finder/CLI (should set sidebar root)
+    Directory(PathBuf),
+    /// App icon clicked (reopen event)
+    Reopen,
+}
+
+// ============================================================================
+// IPC Event Queue — thread-safe queue for IPC → main thread communication
+// ============================================================================
+
+/// Global event queue for IPC messages.
+///
+/// IPC threads push events here via `push_event()`.
+/// The main thread drains them via `process_pending_events()`, which is called
+/// from the GCD wake callback or the custom_event_handler.
+static IPC_EVENT_QUEUE: OnceLock<Mutex<VecDeque<OpenEvent>>> = OnceLock::new();
+
+fn get_event_queue() -> &'static Mutex<VecDeque<OpenEvent>> {
+    IPC_EVENT_QUEUE.get_or_init(|| Mutex::new(VecDeque::new()))
+}
+
+/// Push an event to the IPC queue. Thread-safe.
+pub fn push_event(event: OpenEvent) {
+    get_event_queue()
+        .lock()
+        .expect("IPC event queue poisoned")
+        .push_back(event);
+}
+
+/// Pop the first event from the queue (for initial event in MainApp).
+pub fn try_pop_first_event() -> Option<OpenEvent> {
+    get_event_queue()
+        .lock()
+        .expect("IPC event queue poisoned")
+        .pop_front()
+}
+
+/// Drain all pending events from the IPC queue.
+fn drain_events() -> VecDeque<OpenEvent> {
+    std::mem::take(&mut *get_event_queue().lock().expect("IPC event queue poisoned"))
+}
+
+// ============================================================================
+// Main thread event processing — called from GCD callback or event handler
+// ============================================================================
+
+/// Process pending IPC events on the main thread.
+///
+/// MUST be called on the main thread (accesses MAIN_WINDOWS thread_local).
+/// Called from:
+/// - GCD wake callback (after IPC thread pushes events)
+/// - custom_event_handler (defense in depth)
+pub fn process_pending_events() {
+    let Some(desktop) = crate::window::get_any_main_window() else {
+        // No window available yet; events stay in queue for later processing
+        return;
+    };
+
+    let events = drain_events();
+    for event in events {
+        handle_event_on_main_thread(&desktop, event);
+    }
+}
+
+/// Handle a single event by creating/showing windows. Runs on main thread.
+fn handle_event_on_main_thread(
+    desktop: &std::rc::Rc<dioxus::desktop::DesktopService>,
+    event: OpenEvent,
+) {
+    match event {
+        OpenEvent::File(path) => {
+            tracing::debug!(?path, "Processing file open event");
+            crate::window::create_main_window_sync(
+                desktop,
+                crate::state::Tab::new(path),
+                crate::window::CreateMainWindowConfigParams::default(),
+            );
+        }
+        OpenEvent::Directory(dir) => {
+            tracing::debug!(?dir, "Processing directory open event");
+            let params = crate::window::CreateMainWindowConfigParams {
+                directory: Some(dir),
+                ..Default::default()
+            };
+            crate::window::create_main_window_sync(desktop, crate::state::Tab::default(), params);
+        }
+        OpenEvent::Reopen => {
+            tracing::debug!("Processing reopen event");
+            if crate::window::is_main_app_window_visible() {
+                crate::window::create_main_window_sync(
+                    desktop,
+                    crate::state::Tab::default(),
+                    crate::window::CreateMainWindowConfigParams::default(),
+                );
+            } else {
+                crate::window::show_main_app_window();
+            }
+        }
+    }
+}
+
+// ============================================================================
+// GCD wake mechanism — wake main thread from IPC background thread
+// ============================================================================
+
+/// Wake the main thread to process pending IPC events.
+///
+/// Uses macOS GCD to dispatch a callback to the main queue, which wakes
+/// CFRunLoop even when App Nap has suspended the process. The callback
+/// calls `process_pending_events()` on the main thread.
+#[cfg(target_os = "macos")]
+fn wake_main_thread() {
+    extern "C" {
+        // _dispatch_main_q is the GCD main dispatch queue (static symbol in libdispatch).
+        // dispatch_get_main_queue() is a C macro that expands to &_dispatch_main_q,
+        // so we reference the symbol directly for FFI.
+        static _dispatch_main_q: u8;
+        fn dispatch_async_f(
+            queue: *const u8,
+            context: *mut std::ffi::c_void,
+            work: extern "C" fn(*mut std::ffi::c_void),
+        );
+    }
+
+    extern "C" fn ipc_wake_callback(_context: *mut std::ffi::c_void) {
+        // Runs on the main thread via GCD — safe to access MAIN_WINDOWS thread_local
+        process_pending_events();
+    }
+
+    // SAFETY: _dispatch_main_q is a valid static symbol in libdispatch.
+    // dispatch_async_f schedules the callback on the main thread.
+    unsafe {
+        let main_queue = std::ptr::addr_of!(_dispatch_main_q);
+        dispatch_async_f(main_queue, std::ptr::null_mut(), ipc_wake_callback);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn wake_main_thread() {
+    // On non-macOS platforms, rely on custom_event_handler to drain the IPC queue.
+    // Events will be processed on the next event loop iteration.
+}
 
 /// Socket name for IPC communication.
 const SOCKET_NAME: &str = "com.lambdalisue.arto.sock";
@@ -274,8 +431,7 @@ impl IpcMessage {
 ///
 /// ```no_run
 /// use std::path::Path;
-/// # use arto::components::main_app::OpenEvent;
-/// # use arto::ipc::validate_path;
+/// # use arto::ipc::{OpenEvent, validate_path};
 ///
 /// let event: Option<OpenEvent> = validate_path(Path::new("/path/to/file.md"));
 /// ```
@@ -354,8 +510,9 @@ fn send_messages_to_primary(mut stream: Stream, paths: &[PathBuf]) -> std::io::R
 
 /// Start the IPC server to listen for connections from new instances.
 ///
-/// This function spawns a background thread that accepts connections and forwards
-/// received paths to the given sender channel.
+/// This function spawns a background thread that accepts connections. Received
+/// events are pushed to the global IPC event queue and the main thread is woken
+/// via GCD to process them.
 ///
 /// # Thread Lifecycle
 ///
@@ -367,15 +524,12 @@ fn send_messages_to_primary(mut stream: Stream, paths: &[PathBuf]) -> std::io::R
 ///
 /// This design trade-off avoids the complexity of coordinating graceful shutdown
 /// with Dioxus's lifecycle. Any leftover socket file is harmless and cleaned up on next launch.
-///
-/// # Arguments
-/// * `tx` - Channel sender to forward received paths as OpenEvents
-pub fn start_ipc_server(tx: Sender<OpenEvent>) {
+pub fn start_ipc_server() {
     // Register cleanup handler for graceful shutdown
     register_cleanup_handler();
 
     std::thread::spawn(move || {
-        if let Err(e) = run_ipc_server_sync(tx) {
+        if let Err(e) = run_ipc_server_sync() {
             tracing::error!(
                 ?e,
                 "IPC server failed to start or encountered a fatal error; \
@@ -461,7 +615,7 @@ fn register_cleanup_handler() {
 }
 
 /// Internal sync IPC server implementation.
-fn run_ipc_server_sync(tx: Sender<OpenEvent>) -> anyhow::Result<()> {
+fn run_ipc_server_sync() -> anyhow::Result<()> {
     let socket_path = get_socket_path();
 
     // Ensure parent directory exists (for user-isolated paths like /tmp/arto-{uid}/)
@@ -498,11 +652,10 @@ fn run_ipc_server_sync(tx: Sender<OpenEvent>) -> anyhow::Result<()> {
     for conn in listener.incoming() {
         match conn {
             Ok(stream) => {
-                let tx = tx.clone();
                 if let Err(e) = std::thread::Builder::new()
                     .name("ipc-client-handler".into())
                     .spawn(move || {
-                        handle_client_connection(stream, tx);
+                        handle_client_connection(stream);
                     })
                 {
                     tracing::error!(?e, "Failed to spawn IPC client handler thread");
@@ -603,11 +756,15 @@ fn try_create_listener_once(
 }
 
 /// Handle a single client connection.
-fn handle_client_connection(stream: Stream, tx: Sender<OpenEvent>) {
+///
+/// Parses JSON Lines messages, pushes events to the global queue,
+/// and wakes the main thread via GCD to process them.
+fn handle_client_connection(stream: Stream) {
     // Set read timeout to avoid blocking forever
     set_socket_timeout(&stream, IPC_TIMEOUT);
 
     let reader = BufReader::new(stream);
+    let mut received_events = false;
 
     for line in reader.lines() {
         let line = match line {
@@ -635,9 +792,13 @@ fn handle_client_connection(stream: Stream, tx: Sender<OpenEvent>) {
         tracing::debug!(?message, "Received IPC message");
 
         let event = message.into_open_event();
-        if let Err(e) = tx.blocking_send(event) {
-            tracing::warn!(?e, "Failed to send IPC event to channel");
-        }
+        push_event(event);
+        received_events = true;
+    }
+
+    // Wake main thread once after processing all messages from this client
+    if received_events {
+        wake_main_thread();
     }
 }
 
@@ -781,5 +942,29 @@ mod tests {
     fn test_is_address_in_use_for_non_matching_error() {
         let err = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
         assert!(!is_address_in_use(&err));
+    }
+
+    #[test]
+    fn test_event_queue_fifo_ordering() {
+        // Drain any leftover events from other tests (global static is shared)
+        drain_events();
+
+        push_event(OpenEvent::File(PathBuf::from("/first.md")));
+        push_event(OpenEvent::Directory(PathBuf::from("/second")));
+        push_event(OpenEvent::Reopen);
+
+        // try_pop_first_event returns FIFO order
+        let first = try_pop_first_event();
+        assert!(matches!(first, Some(OpenEvent::File(p)) if p == Path::new("/first.md")));
+
+        // drain_events returns remaining in FIFO order
+        let remaining = drain_events();
+        assert_eq!(remaining.len(), 2);
+        assert!(matches!(&remaining[0], OpenEvent::Directory(p) if p == Path::new("/second")));
+        assert!(matches!(&remaining[1], OpenEvent::Reopen));
+
+        // Queue is empty after drain
+        assert!(try_pop_first_event().is_none());
+        assert!(drain_events().is_empty());
     }
 }

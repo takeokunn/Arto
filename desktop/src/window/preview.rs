@@ -11,7 +11,7 @@ use dioxus::desktop::tao::dpi::LogicalPosition;
 use dioxus::desktop::tao::window::WindowId;
 use dioxus::desktop::{window, DesktopService};
 
-use super::main::{create_new_main_window, CreateMainWindowConfigParams};
+use super::main::{create_main_window, CreateMainWindowConfigParams};
 use crate::state::Tab;
 
 // Thread-local state for the preview window
@@ -91,7 +91,7 @@ async fn create_new_preview_window(
     params.skip_position_shift = true;
 
     // Create the window and get handle directly
-    let window_handle = create_new_main_window(tab, params).await;
+    let window_handle = create_main_window(tab, params).await;
     let window_id = window_handle.window.id();
 
     // Set always on top so preview stays visible during drag
