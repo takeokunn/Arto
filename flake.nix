@@ -91,6 +91,9 @@
               ];
             };
             strictDeps = true;
+            buildInputs = lib.optionals isDarwin [
+              pkgs.libiconv
+            ];
           };
 
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -218,6 +221,9 @@
 
               # Build automation
               pkgs.just
+            ]
+            ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+              pkgs.libiconv
             ];
 
             # Workaround: Nix sets DEVELOPER_DIR to its apple-sdk, which breaks `just build` dmg creation.
