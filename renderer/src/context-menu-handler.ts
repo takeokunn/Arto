@@ -8,7 +8,8 @@ export type ContentContextType =
   | { type: "link"; href: string }
   | { type: "image"; src: string; alt: string | null }
   | { type: "code_block"; content: string; language: string | null }
-  | { type: "mermaid"; source: string };
+  | { type: "mermaid"; source: string }
+  | { type: "math_block"; source: string };
 
 export interface ContextMenuData {
   context: ContentContextType;
@@ -16,20 +17,229 @@ export interface ContextMenuData {
   y: number;
   has_selection: boolean;
   selected_text: string;
+  source_line: number | null;
+  source_line_end: number | null;
 }
 
 /**
- * Detect the context of a right-click by walking up the DOM tree
+ * Explicit position within the DOM for code block line computation.
  */
-function detectContext(target: HTMLElement): ContentContextType {
+interface CodePosition {
+  container: Node;
+  offset: number;
+}
+
+/**
+ * Find the source line number by walking up the DOM tree to find
+ * the nearest ancestor with a data-source-line attribute.
+ *
+ * For code blocks (<pre> with data-source-line-start), computes the
+ * exact line by counting newlines from the start of the code content
+ * to the given position. This is necessary because highlight.js
+ * replaces <code> innerHTML, destroying any per-line annotations.
+ *
+ * @param position - Explicit position for code block offset calculation.
+ *   Required for accurate line detection within code blocks.
+ */
+function findSourceLine(node: Node | null, position?: CodePosition): number | null {
+  let current: Node | null = node;
+  while (current && current !== document.body) {
+    if (current instanceof HTMLElement) {
+      // Check for code block with per-line start info
+      const lineStart = current.dataset.sourceLineStart;
+      if (lineStart !== undefined) {
+        const startLine = parseInt(lineStart, 10);
+        if (!isNaN(startLine)) {
+          const offset = position ? computeCodeBlockLineOffset(current, position) : 0;
+          return startLine + offset;
+        }
+      }
+
+      const line = current.dataset.sourceLine;
+      if (line !== undefined) {
+        const parsed = parseInt(line, 10);
+        if (!isNaN(parsed)) return parsed;
+      }
+      // Stop at markdown-body boundary
+      if (current.classList.contains("markdown-body")) return null;
+    }
+    current = current.parentNode;
+  }
+  return null;
+}
+
+/**
+ * Compute the line offset within a code block by counting newlines
+ * from <code> start to the given position.
+ */
+function computeCodeBlockLineOffset(preElement: HTMLElement, position: CodePosition): number {
+  const codeEl = preElement.querySelector("code");
+  if (!codeEl || !codeEl.contains(position.container)) return 0;
+
+  const range = document.createRange();
+  range.setStart(codeEl, 0);
+  range.setEnd(position.container, position.offset);
+
+  const textBefore = range.toString();
+  let count = 0;
+  for (const ch of textBefore) {
+    if (ch === "\n") count++;
+  }
+  return count;
+}
+
+/**
+ * Find the deepest last descendant of a node.
+ */
+function deepestLastChild(node: Node): Node {
+  let current = node;
+  while (current.lastChild) {
+    current = current.lastChild;
+  }
+  return current;
+}
+
+/**
+ * Get source line range from the current selection or click target.
+ * Returns [startLine, endLine] where both may be the same (single line)
+ * or null if no source line could be determined.
+ *
+ * @param clientX - Mouse X coordinate for caret detection without selection
+ * @param clientY - Mouse Y coordinate for caret detection without selection
+ */
+function getSourceLineRange(
+  target: HTMLElement,
+  clientX: number,
+  clientY: number,
+): {
+  sourceLine: number | null;
+  sourceLineEnd: number | null;
+} {
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+    const range = selection.getRangeAt(0);
+    const startPosition: CodePosition = {
+      container: range.startContainer,
+      offset: range.startOffset,
+    };
+    const startLine = findSourceLine(range.startContainer, startPosition);
+
+    // When endOffset is 0 and endContainer differs from startContainer,
+    // the selection ends at the very start of endContainer — no content
+    // from it is actually selected. This commonly happens with double-click
+    // word selection where the browser extends the range to the start of
+    // the next element. Walk backward to find the real end node.
+    let endNode: Node = range.endContainer;
+    let endPosition: CodePosition;
+    if (range.endOffset === 0 && endNode !== range.startContainer) {
+      const prev = endNode.previousSibling;
+      if (prev) {
+        endNode = deepestLastChild(prev);
+        // Use end of the adjusted text node
+        endPosition = {
+          container: endNode,
+          offset: endNode.nodeType === Node.TEXT_NODE ? (endNode.textContent?.length ?? 0) : 0,
+        };
+      } else if (endNode.parentNode) {
+        endNode = endNode.parentNode;
+        endPosition = { container: endNode, offset: 0 };
+      } else {
+        endPosition = { container: endNode, offset: 0 };
+      }
+    } else {
+      endPosition = {
+        container: range.endContainer,
+        offset: range.endOffset,
+      };
+    }
+
+    const endLine = findSourceLine(endNode, endPosition);
+    return {
+      sourceLine: startLine,
+      sourceLineEnd: endLine,
+    };
+  }
+
+  // No selection — use caret position from mouse coordinates
+  const caretPosition = getCaretPositionFromPoint(clientX, clientY);
+  const line = findSourceLine(target, caretPosition ?? undefined);
+  return {
+    sourceLine: line,
+    sourceLineEnd: line,
+  };
+}
+
+/**
+ * Get caret position at the given screen coordinates.
+ * Uses caretRangeFromPoint (WebKit) to convert mouse position to DOM position.
+ */
+function getCaretPositionFromPoint(clientX: number, clientY: number): CodePosition | null {
+  const range = document.caretRangeFromPoint(clientX, clientY);
+  if (!range) return null;
+  return {
+    container: range.startContainer,
+    offset: range.startOffset,
+  };
+}
+
+/**
+ * Result of detecting the context of a right-click.
+ * Block elements (mermaid, math, image) include their source line range
+ * so that Copy Path items work for entire blocks.
+ */
+interface DetectedContext {
+  context: ContentContextType;
+  /** Block start line (null = use selection-based line detection) */
+  sourceLine: number | null;
+  /** Block end line */
+  sourceLineEnd: number | null;
+}
+
+/**
+ * Read data-source-line and data-source-line-end from an element.
+ */
+function readSourceLineRange(el: HTMLElement): { start: number | null; end: number | null } {
+  const s = el.dataset.sourceLine;
+  const e = el.dataset.sourceLineEnd;
+  const startVal = s !== undefined ? parseInt(s, 10) : NaN;
+  const endVal = e !== undefined ? parseInt(e, 10) : NaN;
+  return {
+    start: !isNaN(startVal) ? startVal : null,
+    end: !isNaN(endVal) ? endVal : null,
+  };
+}
+
+/**
+ * Detect the context of a right-click by walking up the DOM tree.
+ * For block elements, also returns the source line range from data attributes.
+ */
+function detectContext(target: HTMLElement): DetectedContext {
   let current: HTMLElement | null = target;
 
   while (current && !current.classList.contains("markdown-body")) {
     // Check for mermaid diagram
     if (current.classList.contains("preprocessed-mermaid")) {
-      // Source is stored in data-original-content attribute
       const source = current.dataset.originalContent || "";
-      return { type: "mermaid", source };
+      const range = readSourceLineRange(current);
+      return {
+        context: { type: "mermaid", source },
+        sourceLine: range.start,
+        sourceLineEnd: range.end,
+      };
+    }
+
+    // Check for math block (preprocessed-math code block or preprocessed-math-display)
+    if (
+      current.classList.contains("preprocessed-math") ||
+      current.classList.contains("preprocessed-math-display")
+    ) {
+      const source = current.dataset.originalContent || "";
+      const range = readSourceLineRange(current);
+      return {
+        context: { type: "math_block", source },
+        sourceLine: range.start,
+        sourceLineEnd: range.end,
+      };
     }
 
     // Check for code block (pre > code)
@@ -37,42 +247,60 @@ function detectContext(target: HTMLElement): ContentContextType {
       const codeEl = current.querySelector("code");
       const content = codeEl?.textContent || "";
       const language = extractLanguage(codeEl);
-      return { type: "code_block", content, language };
+      return {
+        context: { type: "code_block", content, language },
+        sourceLine: null,
+        sourceLineEnd: null,
+      };
     }
 
     // Check for inline code that's part of a code block
     if (current.tagName === "CODE" && current.parentElement?.tagName === "PRE") {
       const content = current.textContent || "";
       const language = extractLanguage(current);
-      return { type: "code_block", content, language };
+      return {
+        context: { type: "code_block", content, language },
+        sourceLine: null,
+        sourceLineEnd: null,
+      };
     }
 
     // Check for image
     if (current.tagName === "IMG") {
       const img = current as HTMLImageElement;
+      // Image is inline within <p data-source-line="N">, use parent's line
+      const line = findSourceLine(current);
       return {
-        type: "image",
-        src: img.src,
-        alt: img.alt || null,
+        context: { type: "image", src: img.src, alt: img.alt || null },
+        sourceLine: line,
+        sourceLineEnd: line,
       };
     }
 
     // Check for link (but not markdown-link which is handled differently)
     if (current.tagName === "A" && !current.classList.contains("markdown-link")) {
       const anchor = current as HTMLAnchorElement;
-      return { type: "link", href: anchor.href };
+      return {
+        context: { type: "link", href: anchor.href },
+        sourceLine: null,
+        sourceLineEnd: null,
+      };
     }
 
     // Check for markdown-link (internal links converted by Rust)
     if (current.classList.contains("markdown-link")) {
       const href = current.getAttribute("data-path") || "";
-      return { type: "link", href };
+      return {
+        context: { type: "link", href },
+        sourceLine: null,
+        sourceLineEnd: null,
+      };
     }
 
     current = current.parentElement;
   }
 
-  return { type: "general" };
+  return { context: { type: "general" }, sourceLine: null, sourceLineEnd: null };
 }
 
 /**
@@ -200,14 +428,27 @@ export function setup(sendToRust: (data: ContextMenuData) => void): void {
 
     // Detect context and send to Rust
     // Position adjustment is handled by MutationObserver after menu renders
-    const context = detectContext(target);
+    const { context, sourceLine: blockLine, sourceLineEnd: blockLineEnd } = detectContext(target);
     const { hasSelection, selectedText } = getTextSelection();
+
+    // Block elements override selection-based line detection
+    let sourceLine: number | null;
+    let sourceLineEnd: number | null;
+    if (blockLine !== null) {
+      sourceLine = blockLine;
+      sourceLineEnd = blockLineEnd ?? blockLine;
+    } else {
+      ({ sourceLine, sourceLineEnd } = getSourceLineRange(target, event.clientX, event.clientY));
+    }
+
     const data: ContextMenuData = {
       context,
       x: event.clientX,
       y: event.clientY,
       has_selection: hasSelection,
       selected_text: selectedText,
+      source_line: sourceLine,
+      source_line_end: sourceLineEnd,
     };
 
     sendToRust(data);

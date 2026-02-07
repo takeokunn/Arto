@@ -319,6 +319,8 @@ pub fn App(
                     selected_text: menu_state.data.selected_text.clone(),
                     current_file: menu_state.current_file.clone(),
                     base_dir: menu_state.base_dir.clone(),
+                    source_line: menu_state.data.source_line,
+                    source_line_end: menu_state.data.source_line_end,
                     on_close: move |_| close_context_menu(),
                 }
             }
