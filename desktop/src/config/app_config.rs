@@ -8,6 +8,7 @@ mod theme_config;
 mod window_dimension;
 mod window_position_config;
 mod window_size_config;
+mod zoom_config;
 
 pub use behavior::{NewWindowBehavior, StartupBehavior};
 pub use directory_config::DirectoryConfig;
@@ -19,6 +20,7 @@ pub use window_position_config::{
     WindowPosition, WindowPositionConfig, WindowPositionMode, WindowPositionOffset,
 };
 pub use window_size_config::{WindowSize, WindowSizeConfig};
+pub use zoom_config::ZoomConfig;
 
 /// Global application configuration
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -30,6 +32,7 @@ pub struct Config {
     pub right_sidebar: RightSidebarConfig,
     pub window_position: WindowPositionConfig,
     pub window_size: WindowSizeConfig,
+    pub zoom: ZoomConfig,
 }
 
 #[cfg(test)]
@@ -82,6 +85,11 @@ mod tests {
         );
         assert_eq!(config.window_size.on_startup, StartupBehavior::Default);
         assert_eq!(config.window_size.on_new_window, NewWindowBehavior::Default);
+
+        // Zoom defaults
+        assert_eq!(config.zoom.default_zoom_level, 1.0);
+        assert_eq!(config.zoom.on_startup, StartupBehavior::Default);
+        assert_eq!(config.zoom.on_new_window, NewWindowBehavior::Default);
 
         // Window position defaults
         assert_eq!(
@@ -164,6 +172,11 @@ mod tests {
                 on_startup: StartupBehavior::LastClosed,
                 on_new_window: NewWindowBehavior::LastFocused,
             },
+            zoom: ZoomConfig {
+                default_zoom_level: 1.5,
+                on_startup: StartupBehavior::LastClosed,
+                on_new_window: NewWindowBehavior::LastFocused,
+            },
         };
 
         let json = serde_json::to_string_pretty(&config).unwrap();
@@ -194,5 +207,19 @@ mod tests {
             parsed.window_size.default_size.width.unit,
             WindowDimensionUnit::Pixels
         );
+        assert_eq!(parsed.zoom.default_zoom_level, 1.5);
+        assert_eq!(parsed.zoom.on_startup, StartupBehavior::LastClosed);
+        assert_eq!(parsed.zoom.on_new_window, NewWindowBehavior::LastFocused);
+    }
+
+    #[test]
+    fn test_config_without_zoom_section_uses_defaults() {
+        // Empty JSON should deserialize to all defaults (including zoom)
+        let json = r#"{}"#;
+        let parsed: Config = serde_json::from_str(json).unwrap();
+
+        assert_eq!(parsed.zoom.default_zoom_level, 1.0);
+        assert_eq!(parsed.zoom.on_startup, StartupBehavior::Default);
+        assert_eq!(parsed.zoom.on_new_window, NewWindowBehavior::Default);
     }
 }
