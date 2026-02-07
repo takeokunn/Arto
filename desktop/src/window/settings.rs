@@ -47,6 +47,10 @@ pub struct WindowPositionPreference {
     pub position: LogicalPosition<i32>,
 }
 
+pub struct ZoomPreference {
+    pub zoom_level: f64,
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -315,6 +319,25 @@ pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
     )
 }
 
+pub fn get_zoom_preference(is_first_window: bool) -> ZoomPreference {
+    let cfg = CONFIG.read();
+    let zoom_level = choose_by_behavior(
+        is_first_window,
+        cfg.zoom.on_startup,
+        cfg.zoom.on_new_window,
+        || cfg.zoom.default_zoom_level,
+        || {
+            get_last_focused_window_state()
+                .map(|state| *state.zoom_level.read())
+                .unwrap_or_else(|| PersistedState::load().zoom_level)
+        },
+    );
+    // Clamp to safe range to handle corrupt config/state values
+    ZoomPreference {
+        zoom_level: zoom_level.clamp(0.5, 5.0),
+    }
+}
+
 pub fn get_window_size_preference(is_first_window: bool) -> WindowSizePreference {
     let (_, _, size) = resolve_window_settings(is_first_window);
     let (_, screen_size) = get_current_display_bounds()
@@ -416,6 +439,18 @@ mod tests {
             result.tab,
             RightSidebarTab::Contents | RightSidebarTab::Search
         ));
+    }
+
+    #[test]
+    fn test_get_zoom_preference_first_window() {
+        let result = get_zoom_preference(true);
+        assert!(result.zoom_level > 0.0);
+    }
+
+    #[test]
+    fn test_get_zoom_preference_new_window() {
+        let result = get_zoom_preference(false);
+        assert!(result.zoom_level > 0.0);
     }
 
     #[test]

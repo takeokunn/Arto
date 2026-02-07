@@ -14,12 +14,13 @@ pub fn Sidebar() -> Element {
     let is_visible = sidebar_state.open;
     let width = sidebar_state.width;
 
+    let zoom_level = state.zoom_level;
     let mut is_resizing = use_signal(|| false);
 
     let style = if is_visible {
-        format!("width: {}px;", width)
+        format!("width: {}px; zoom: {};", width, zoom_level())
     } else {
-        "width: 0;".to_string()
+        format!("width: 0; zoom: {};", zoom_level())
     };
 
     rsx! {

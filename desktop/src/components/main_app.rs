@@ -62,6 +62,7 @@ pub fn MainApp() -> Element {
     let theme_pref = settings::get_theme_preference(is_first_window);
     let sidebar_pref = settings::get_sidebar_preference(is_first_window);
     let toc_pref = settings::get_toc_preference(is_first_window);
+    let zoom_pref = settings::get_zoom_preference(is_first_window);
 
     // Directory resolution: override (from event) → config → tab parent → home → root
     let directory = directory_override
@@ -84,6 +85,7 @@ pub fn MainApp() -> Element {
             toc_open: toc_pref.open,
             toc_width: toc_pref.width,
             toc_tab: toc_pref.tab,
+            zoom_level: zoom_pref.zoom_level,
         }
     }
 }

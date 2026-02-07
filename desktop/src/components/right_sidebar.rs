@@ -31,15 +31,16 @@ pub fn RightSidebar(props: RightSidebarProps) -> Element {
     let is_open = *state.right_sidebar_open.read();
     let width = *state.right_sidebar_width.read();
     let active_tab = *state.right_sidebar_tab.read();
+    let zoom_level = state.zoom_level;
     let is_resizing = use_signal(|| false);
 
     // Get data for each tab
     let headings = props.headings.clone();
 
     let style = if is_open {
-        format!("width: {}px;", width)
+        format!("width: {}px; zoom: {};", width, zoom_level())
     } else {
-        "width: 0;".to_string()
+        format!("width: 0; zoom: {};", zoom_level())
     };
 
     rsx! {

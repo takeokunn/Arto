@@ -51,6 +51,7 @@ pub struct CreateMainWindowConfigParams {
     pub toc_open: bool,
     pub toc_width: f64,
     pub toc_tab: RightSidebarTab,
+    pub zoom_level: f64,
     pub size: LogicalSize<u32>,
     pub position: LogicalPosition<i32>,
     /// Skip position shifting for overlap avoidance.
@@ -66,6 +67,7 @@ impl CreateMainWindowConfigParams {
         let theme_pref = settings::get_theme_preference(is_first_window);
         let sidebar_pref = settings::get_sidebar_preference(is_first_window);
         let toc_pref = settings::get_toc_preference(is_first_window);
+        let zoom_pref = settings::get_zoom_preference(is_first_window);
         let size_pref = settings::get_window_size_preference(is_first_window);
         let position_pref = settings::get_window_position_preference(is_first_window);
 
@@ -78,6 +80,7 @@ impl CreateMainWindowConfigParams {
             toc_open: toc_pref.open,
             toc_width: toc_pref.width,
             toc_tab: toc_pref.tab,
+            zoom_level: zoom_pref.zoom_level,
             size: size_pref.size,
             position: position_pref.position,
             skip_position_shift: false,
@@ -264,6 +267,7 @@ fn build_window_dom_and_config(
             toc_open: params.toc_open,
             toc_width: params.toc_width,
             toc_tab: params.toc_tab,
+            zoom_level: params.zoom_level,
         },
     );
 
