@@ -25,7 +25,8 @@ pub fn SliderInput(
     };
 
     let display_value = if decimals == 0 {
-        format!("{}", value as i32)
+        // Round instead of truncate to match slider/state values
+        format!("{:.0}", value)
     } else {
         format!("{:.prec$}", value, prec = decimals as usize)
     };

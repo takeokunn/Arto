@@ -1,5 +1,5 @@
 use super::super::form_controls::{OptionCardItem, OptionCards, SliderInput};
-use crate::config::{Config, NewWindowBehavior, StartupBehavior};
+use crate::config::{normalize_zoom_level, Config, NewWindowBehavior, StartupBehavior};
 use crate::state::AppState;
 use dioxus::prelude::*;
 
@@ -35,7 +35,8 @@ pub fn SidebarTab(
                     unit: "x".to_string(),
                     decimals: 1,
                     on_change: move |new_zoom| {
-                        state.sidebar.write().zoom_level = new_zoom;
+                        // Normalize to 0.1 step and clamp to valid range
+                        state.sidebar.write().zoom_level = normalize_zoom_level(new_zoom);
                     },
                     default_value: Some(sidebar_cfg.default_zoom_level),
                 }
