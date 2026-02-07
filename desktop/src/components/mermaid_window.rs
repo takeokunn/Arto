@@ -1,3 +1,4 @@
+use dioxus::desktop::{use_muda_event_handler, window};
 use dioxus::prelude::*;
 use sha2::{Digest, Sha256};
 
@@ -37,6 +38,16 @@ pub fn MermaidWindow(props: MermaidWindowProps) -> Element {
 
     // Setup zoom update handler
     use_zoom_update_handler(zoom_level);
+
+    // Handle Cmd+W and Cmd+Shift+W to close this child window
+    use_muda_event_handler(move |event| {
+        if !window().is_focused() {
+            return;
+        }
+        if crate::menu::is_close_action(event) {
+            window().close();
+        }
+    });
 
     rsx! {
         div {
