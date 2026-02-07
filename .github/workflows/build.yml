@@ -110,6 +110,12 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: dioxus-cli@${{ steps.dx-version.outputs.version }}
+      - name: Set package version for DMG filename
+        if: ${{ github.event_name == 'release' }}
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          sed -i '' "s/^version = \"0.0.0\"/version = \"${VERSION}\"/" desktop/Cargo.toml
       - run: just build
       - uses: actions/upload-artifact@v6
         with:
