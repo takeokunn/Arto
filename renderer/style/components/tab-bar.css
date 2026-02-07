@@ -79,6 +79,37 @@
   text-overflow: ellipsis;
 }
 
+/* ==========================================================================
+   Pinned Tab Styles
+   ========================================================================== */
+
+.tab.pinned {
+  width: auto;
+  min-width: 36px;
+  max-width: 100px;
+  padding: 8px 10px;
+}
+
+.tab.pinned .tab-name {
+  max-width: 50px;
+}
+
+.tab-pin-icon {
+  opacity: var(--opacity-muted);
+  flex-shrink: 0;
+}
+
+.tab.pinned.active .tab-pin-icon {
+  opacity: var(--opacity-hover);
+}
+
+/* Visual separator between pinned and unpinned groups */
+.tab.pinned + .tab:not(.pinned) {
+  margin-left: 4px;
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+}
+
 .tab-close {
   display: flex;
   align-items: center;
