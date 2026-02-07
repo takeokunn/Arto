@@ -136,25 +136,62 @@ fn use_file_loader(
 
 /// Handle scroll position when navigating to a file.
 ///
-/// If pending_scroll_position is set (from back/forward navigation), wait for
-/// Mermaid/KaTeX rendering to complete, then restore that position.
+/// If pending_scroll_position is set (from back/forward navigation or tab switch),
+/// restore that position in two phases:
+/// 1. Immediately when DOM content changes (MutationObserver, before browser paint)
+/// 2. After Mermaid/KaTeX rendering completes (adjusts for content height changes)
+///
 /// Otherwise, reset to top immediately (for new navigation like clicking a link).
 fn handle_scroll_position(state: &mut AppState) {
-    // Check if there's a pending scroll position to restore (from back/forward)
     let pending_scroll = state.pending_scroll_position.take();
 
     if let Some(scroll) = pending_scroll {
-        // For back/forward: wait for Mermaid/KaTeX rendering to complete before restoring
-        // This ensures the content height is final before scrolling
+        // Fast path: scrolling to top doesn't need two-phase restoration
+        if scroll <= 0.0 {
+            let _ = document::eval("document.querySelector('.content')?.scrollTo(0, 0);");
+            tracing::debug!("Reset scroll position to top (fast path)");
+            return;
+        }
+
+        // Two-phase scroll restoration for non-zero positions:
+        // Phase 1: MutationObserver on .markdown-body fires synchronously after innerHTML
+        //          update but before browser paint, preventing visible scroll flash.
+        // Phase 2: onRenderComplete fires after Mermaid/KaTeX render, adjusting for any
+        //          content height changes from dynamic rendering.
         let scroll_js = format!(
-            r#"window.Arto.onRenderComplete(() => {{
-                document.querySelector('.content')?.scrollTo(0, {});
-                console.debug('Restored scroll position after render:', {});
-            }});"#,
-            scroll, scroll
+            r#"(() => {{
+                const target = {};
+                const container = document.querySelector('.markdown-body');
+                let observer;
+                if (container) {{
+                    observer = new MutationObserver(() => {{
+                        if (observer) {{
+                            observer.disconnect();
+                            observer = null;
+                        }}
+                        document.querySelector('.content')?.scrollTo(0, target);
+                    }});
+                    observer.observe(container, {{ childList: true }});
+                    // Fallback: ensure the observer is disconnected even if no mutation occurs.
+                    setTimeout(() => {{
+                        if (observer) {{
+                            observer.disconnect();
+                            observer = null;
+                        }}
+                    }}, 5000);
+                }}
+                window.Arto.onRenderComplete(() => {{
+                    if (observer) {{
+                        observer.disconnect();
+                        observer = null;
+                    }}
+                    document.querySelector('.content')?.scrollTo(0, target);
+                }});
+            }})();"#,
+            scroll
         );
         let _ = document::eval(&scroll_js);
-        tracing::debug!(scroll, "Scheduled scroll position restoration after render");
+        tracing::debug!(scroll, "Scheduled two-phase scroll position restoration");
     } else {
         // Reset to top immediately for new navigation
         let _ = document::eval("document.querySelector('.content')?.scrollTo(0, 0);");
