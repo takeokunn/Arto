@@ -161,6 +161,7 @@ pub fn TabContextMenu(
 
 #[derive(Props, Clone, PartialEq)]
 struct ContextMenuItemProps {
+    #[props(into)]
     label: String,
     #[props(default)]
     icon: Option<IconName>,

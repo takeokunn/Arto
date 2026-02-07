@@ -101,9 +101,9 @@
    ========================================================================== */
 
 .tab.pinned {
-  width: auto;
-  min-width: 36px;
-  max-width: 100px;
+  /* Keep the same fixed width as .tab to stay in sync with TAB_WIDTH in
+   * desktop/src/drag.rs. Adjust only internal layout (padding, content
+   * max-width) for visual differences. */
   padding: 8px 10px;
 }
 
