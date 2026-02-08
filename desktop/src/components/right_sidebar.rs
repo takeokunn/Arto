@@ -31,7 +31,7 @@ pub fn RightSidebar(props: RightSidebarProps) -> Element {
     let is_open = *state.right_sidebar_open.read();
     let width = *state.right_sidebar_width.read();
     let active_tab = *state.right_sidebar_tab.read();
-    let zoom_level = state.zoom_level;
+    let zoom_level = *state.right_sidebar_zoom_level.read();
     let is_resizing = use_signal(|| false);
 
     // Get data for each tab
@@ -43,7 +43,7 @@ pub fn RightSidebar(props: RightSidebarProps) -> Element {
         "width: 0;".to_string()
     };
 
-    let inner_style = format!("zoom: {};", zoom_level());
+    let inner_style = format!("zoom: {};", zoom_level);
 
     rsx! {
         div {

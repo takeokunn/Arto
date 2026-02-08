@@ -38,9 +38,11 @@ pub fn App(
     sidebar_open: bool,
     sidebar_width: f64,
     sidebar_show_all_files: bool,
-    toc_open: bool,
-    toc_width: f64,
-    toc_tab: RightSidebarTab,
+    sidebar_zoom_level: f64,
+    right_sidebar_open: bool,
+    right_sidebar_width: f64,
+    right_sidebar_tab: RightSidebarTab,
+    right_sidebar_zoom_level: f64,
     zoom_level: f64,
 ) -> Element {
     // Initialize application state with the provided tab
@@ -62,13 +64,19 @@ pub fn App(
 
         // Apply initial right sidebar settings from params
         {
-            app_state.right_sidebar_open.set(toc_open);
-            app_state.right_sidebar_width.set(toc_width);
-            app_state.right_sidebar_tab.set(toc_tab);
+            app_state.right_sidebar_open.set(right_sidebar_open);
+            app_state.right_sidebar_width.set(right_sidebar_width);
+            app_state.right_sidebar_tab.set(right_sidebar_tab);
         }
 
-        // Apply initial zoom level from params
-        app_state.zoom_level.set(zoom_level);
+        // Apply initial zoom levels from params (already normalized in window::settings)
+        {
+            app_state.sidebar.write().zoom_level = sidebar_zoom_level;
+            app_state
+                .right_sidebar_zoom_level
+                .set(right_sidebar_zoom_level);
+            app_state.zoom_level.set(zoom_level);
+        }
 
         let metrics = crate::window::metrics::capture_window_metrics(&window().window);
         *app_state.position.write() = LogicalPosition::new(metrics.position.x, metrics.position.y);
@@ -303,7 +311,7 @@ pub fn App(
                 Content {},
             }
 
-            RightSidebar { headings: state.toc_headings.read().clone() }
+            RightSidebar { headings: state.right_sidebar_headings.read().clone() }
 
             // Drag and drop overlay
             if is_dragging() {

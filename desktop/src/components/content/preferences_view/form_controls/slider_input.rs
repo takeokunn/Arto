@@ -1,6 +1,10 @@
 use dioxus::prelude::*;
 
-/// Slider input component with numeric input and "Use Current" option
+/// Slider input component with numeric input and optional action button.
+///
+/// - `current_value`: When Some, shows "Use Current" button (for default settings).
+/// - `default_value`: When Some, shows "Use Default" button (for current settings).
+/// - When both are None, no button is shown.
 #[component]
 pub fn SliderInput(
     value: f64,
@@ -10,18 +14,21 @@ pub fn SliderInput(
     unit: String,
     on_change: EventHandler<f64>,
     current_value: Option<f64>,
+    default_value: Option<f64>,
+    #[props(default = 0)] decimals: u32,
 ) -> Element {
-    let handle_use_current = move |_| {
-        if let Some(current) = current_value {
-            on_change.call(current);
-        }
-    };
-
     let handle_number_input = move |evt: Event<FormData>| {
         if let Ok(new_value) = evt.value().parse::<f64>() {
             let clamped = new_value.clamp(min, max);
             on_change.call(clamped);
         }
+    };
+
+    let display_value = if decimals == 0 {
+        // Round instead of truncate to match slider/state values
+        format!("{:.0}", value)
+    } else {
+        format!("{:.prec$}", value, prec = decimals as usize)
     };
 
     rsx! {
@@ -46,16 +53,23 @@ pub fn SliderInput(
                     min: "{min}",
                     max: "{max}",
                     step: "{step}",
-                    value: "{value as i32}",
+                    value: "{display_value}",
                     oninput: handle_number_input,
                 }
                 span { "{unit}" }
             }
-            button {
-                class: "use-current-button",
-                disabled: current_value.is_none(),
-                onclick: handle_use_current,
-                "Use Current"
+            if let Some(current) = current_value {
+                button {
+                    class: "use-current-button",
+                    onclick: move |_| on_change.call(current),
+                    "Use Current"
+                }
+            } else if let Some(default) = default_value {
+                button {
+                    class: "use-current-button",
+                    onclick: move |_| on_change.call(default),
+                    "Use Default"
+                }
             }
         }
     }

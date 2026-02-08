@@ -61,7 +61,8 @@ pub struct AppState {
     pub right_sidebar_open: Signal<bool>,
     pub right_sidebar_width: Signal<f64>,
     pub right_sidebar_tab: Signal<RightSidebarTab>,
-    pub toc_headings: Signal<Vec<HeadingInfo>>,
+    pub right_sidebar_zoom_level: Signal<f64>,
+    pub right_sidebar_headings: Signal<Vec<HeadingInfo>>,
     pub position: Signal<LogicalPosition<i32>>,
     pub size: Signal<LogicalSize<u32>>,
     // Search state (not persisted, managed via JavaScript for IME compatibility)
@@ -97,7 +98,8 @@ impl AppState {
             right_sidebar_open: Signal::new(false),
             right_sidebar_width: Signal::new(DEFAULT_RIGHT_SIDEBAR_WIDTH),
             right_sidebar_tab: Signal::new(RightSidebarTab::default()),
-            toc_headings: Signal::new(Vec::new()),
+            right_sidebar_zoom_level: Signal::new(1.0),
+            right_sidebar_headings: Signal::new(Vec::new()),
             position: Signal::new(Default::default()),
             size: Signal::new(Default::default()),
             // Search state

@@ -82,7 +82,7 @@ fn use_file_loader(
                         match render_to_html_with_toc(&content, &file) {
                             Ok((rendered, headings)) => {
                                 html.set(rendered);
-                                state.toc_headings.set(headings);
+                                state.right_sidebar_headings.set(headings);
                                 tracing::trace!("Rendered as Markdown: {:?}", &file);
                             }
                             Err(e) => {
@@ -98,7 +98,7 @@ fn use_file_loader(
                                     escaped_content
                                 );
                                 html.set(plain_html);
-                                state.toc_headings.set(Vec::new());
+                                state.right_sidebar_headings.set(Vec::new());
                             }
                         }
                     } else {
@@ -110,7 +110,7 @@ fn use_file_loader(
                             escaped_content
                         );
                         html.set(plain_html);
-                        state.toc_headings.set(Vec::new());
+                        state.right_sidebar_headings.set(Vec::new());
                     }
 
                     // Re-apply search highlighting after content changes
