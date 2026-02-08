@@ -22,8 +22,8 @@ pub enum ContentContext {
     },
     /// Mermaid diagram
     Mermaid { source: String },
-    /// Math expression
-    Math { source: String },
+    /// Math block (display math or math code block)
+    MathBlock { source: String },
 }
 
 /// Context menu data from JavaScript
@@ -37,6 +37,12 @@ pub struct ContextMenuData {
     /// The selected text (captured at context menu open time)
     #[serde(default)]
     pub selected_text: String,
+    /// Source line number at click/selection start position (1-based)
+    #[serde(default)]
+    pub source_line: Option<u32>,
+    /// Source line number at selection end position (1-based, same as source_line for single line)
+    #[serde(default)]
+    pub source_line_end: Option<u32>,
 }
 
 #[derive(Props, Clone, PartialEq)]
@@ -47,12 +53,26 @@ pub struct ContentContextMenuProps {
     pub selected_text: String,
     pub current_file: Option<PathBuf>,
     pub base_dir: PathBuf,
+    pub source_line: Option<u32>,
+    pub source_line_end: Option<u32>,
     pub on_close: EventHandler<()>,
 }
 
 #[component]
 pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
-    let has_context_specific = !matches!(props.context, ContentContext::General);
+    // Extract copyable source from context (code blocks, mermaid, math)
+    let copy_code_source = match &props.context {
+        ContentContext::CodeBlock { content, .. } => Some(content.clone()),
+        ContentContext::Mermaid { source } | ContentContext::MathBlock { source } => {
+            Some(source.clone())
+        }
+        _ => None,
+    };
+
+    let has_context_specific = matches!(
+        props.context,
+        ContentContext::Link { .. } | ContentContext::Image { .. }
+    );
 
     rsx! {
         // Backdrop to close menu on outside click
@@ -71,7 +91,7 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
             onmousedown: move |evt| evt.prevent_default(),
             onclick: move |evt| evt.stop_propagation(),
 
-            // === Section 1: Basic text operations ===
+            // === Section 1: Copy operations ===
             if props.has_selection {
                 ContextMenuItem {
                     label: "Copy",
@@ -87,6 +107,32 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                     },
                 }
             }
+
+            if let Some(source) = copy_code_source {
+                ContextMenuItem {
+                    label: "Copy Code",
+                    icon: Some(IconName::Copy),
+                    on_click: {
+                        let on_close = props.on_close;
+                        move |_| {
+                            crate::utils::clipboard::copy_text(&source);
+                            on_close.call(());
+                        }
+                    },
+                }
+            }
+
+            if props.current_file.is_some() {
+                CopyPathItems {
+                    current_file: props.current_file.clone().unwrap(),
+                    source_line: props.source_line,
+                    source_line_end: props.source_line_end,
+                    on_close: props.on_close,
+                }
+            }
+
+            // === Section 2: Selection and search ===
+            ContextMenuSeparator {}
 
             ContextMenuItem {
                 label: "Select All",
@@ -114,9 +160,6 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                 },
             }
 
-            // === Section 2: Find and file path operations ===
-            ContextMenuSeparator {}
-
             ContextMenuItem {
                 label: "Find in Page",
                 shortcut: Some("⌘F"),
@@ -138,7 +181,7 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                 },
             }
 
-            // === Section 3: Context-specific items ===
+            // === Section 3: Context-specific items (link, image) ===
             if has_context_specific {
                 ContextMenuSeparator {}
             }
@@ -157,25 +200,13 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                         on_close: props.on_close,
                     }
                 },
-                ContentContext::CodeBlock { content, .. } => rsx! {
-                    CodeBlockContextItems {
-                        content: content.clone(),
-                        on_close: props.on_close,
-                    }
-                },
-                ContentContext::Mermaid { source } => rsx! {
-                    MermaidContextItems {
-                        source: source.clone(),
-                        on_close: props.on_close,
-                    }
-                },
-                ContentContext::Math { source } => rsx! {
+                ContentContext::MathBlock { source } => rsx! {
                     MathContextItems {
                         source: source.clone(),
                         on_close: props.on_close,
                     }
                 },
-                ContentContext::General => rsx! {},
+                _ => rsx! {},
             }
         }
     }
@@ -187,7 +218,8 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
 
 #[derive(Props, Clone, PartialEq)]
 struct ContextMenuItemProps {
-    label: &'static str,
+    #[props(into)]
+    label: String,
     #[props(default)]
     shortcut: Option<&'static str>,
     #[props(default)]
@@ -337,37 +369,62 @@ fn ImageContextItems(src: String, on_close: EventHandler<()>) -> Element {
 }
 
 #[component]
-fn CodeBlockContextItems(content: String, on_close: EventHandler<()>) -> Element {
+fn CopyPathItems(
+    current_file: PathBuf,
+    source_line: Option<u32>,
+    source_line_end: Option<u32>,
+    on_close: EventHandler<()>,
+) -> Element {
+    let path_str = current_file.display().to_string();
+    let has_range =
+        source_line.is_some() && source_line_end.is_some() && source_line != source_line_end;
+
     rsx! {
         ContextMenuItem {
-            label: "Copy Code",
+            label: "Copy File Path",
             icon: Some(IconName::Copy),
             on_click: {
-                let content = content.clone();
+                let path_str = path_str.clone();
                 let on_close = on_close;
                 move |_| {
-                    crate::utils::clipboard::copy_text(&content);
+                    crate::utils::clipboard::copy_text(&path_str);
                     on_close.call(());
                 }
             },
         }
-    }
-}
 
-#[component]
-fn MermaidContextItems(source: String, on_close: EventHandler<()>) -> Element {
-    rsx! {
-        ContextMenuItem {
-            label: "Copy Code",
-            icon: Some(IconName::Copy),
-            on_click: {
-                let source = source.clone();
-                let on_close = on_close;
-                move |_| {
-                    crate::utils::clipboard::copy_text(&source);
-                    on_close.call(());
+        if let Some(line) = source_line {
+            ContextMenuItem {
+                label: format!("Copy File Path with Line ({line})"),
+                icon: Some(IconName::Copy),
+                on_click: {
+                    let path_str = path_str.clone();
+                    let on_close = on_close;
+                    move |_| {
+                        crate::utils::clipboard::copy_text(format!("{path_str}:{line}"));
+                        on_close.call(());
+                    }
+                },
+            }
+        }
+
+        if has_range {
+            if let (Some(start), Some(end)) = (source_line, source_line_end) {
+                ContextMenuItem {
+                    label: format!("Copy File Path with Range ({start}-{end})"),
+                    icon: Some(IconName::Copy),
+                    on_click: {
+                        let path_str = path_str.clone();
+                        let on_close = on_close;
+                        move |_| {
+                            crate::utils::clipboard::copy_text(
+                                format!("{path_str}:{start}-{end}"),
+                            );
+                            on_close.call(());
+                        }
+                    },
                 }
-            },
+            }
         }
     }
 }

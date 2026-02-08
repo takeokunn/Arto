@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use crate::components::right_sidebar::RightSidebarTab;
 use crate::config::{
-    NewWindowBehavior, StartupBehavior, WindowDimension, WindowDimensionUnit, WindowPosition,
-    WindowPositionMode, WindowSize, CONFIG,
+    normalize_zoom_level as normalize_sidebar_zoom_level, NewWindowBehavior, StartupBehavior,
+    WindowDimension, WindowDimensionUnit, WindowPosition, WindowPositionMode, WindowSize, CONFIG,
 };
 use crate::state::{PersistedState, Position, Size};
 use crate::theme::Theme;
@@ -15,9 +15,9 @@ use crate::window::main::get_last_focused_window_state;
 
 const MIN_WINDOW_DIMENSION: f64 = 100.0;
 
-// ============================================================================
+// ----------------------------------------------------------------------------
 // Zoom Helpers
-// ============================================================================
+// ----------------------------------------------------------------------------
 
 /// Normalize zoom level to the nearest 0.1 step to prevent precision drift
 /// and ensure consistent behavior with menu zoom in/out actions.
@@ -25,9 +25,9 @@ pub fn normalize_zoom_level(zoom: f64) -> f64 {
     ((zoom * 10.0).round() / 10.0).clamp(0.5, 5.0)
 }
 
-// ============================================================================
+// ----------------------------------------------------------------------------
 // Preference Types
-// ============================================================================
+// ----------------------------------------------------------------------------
 
 pub struct ThemePreference {
     pub theme: Theme,
@@ -41,12 +41,14 @@ pub struct SidebarPreference {
     pub open: bool,
     pub width: f64,
     pub show_all_files: bool,
+    pub zoom_level: f64,
 }
 
-pub struct TocPreference {
+pub struct RightSidebarPreference {
     pub open: bool,
     pub width: f64,
     pub tab: RightSidebarTab,
+    pub zoom_level: f64,
 }
 
 pub struct WindowSizePreference {
@@ -61,9 +63,9 @@ pub struct ZoomPreference {
     pub zoom_level: f64,
 }
 
-// ============================================================================
+// ----------------------------------------------------------------------------
 // Helper Functions
-// ============================================================================
+// ----------------------------------------------------------------------------
 
 fn choose_by_behavior<T>(
     is_first_window: bool,
@@ -231,9 +233,9 @@ fn resolve_window_settings(
     (position, position_mode, size)
 }
 
-// ============================================================================
+// ----------------------------------------------------------------------------
 // Public API
-// ============================================================================
+// ----------------------------------------------------------------------------
 
 pub fn get_theme_preference(is_first_window: bool) -> ThemePreference {
     let cfg = CONFIG.read();
@@ -270,7 +272,7 @@ pub fn get_directory_preference(is_first_window: bool) -> DirectoryPreference {
 
 pub fn get_sidebar_preference(is_first_window: bool) -> SidebarPreference {
     let cfg = CONFIG.read();
-    choose_by_behavior(
+    let pref = choose_by_behavior(
         is_first_window,
         cfg.sidebar.on_startup,
         cfg.sidebar.on_new_window,
@@ -278,6 +280,7 @@ pub fn get_sidebar_preference(is_first_window: bool) -> SidebarPreference {
             open: cfg.sidebar.default_open,
             width: cfg.sidebar.default_width,
             show_all_files: cfg.sidebar.default_show_all_files,
+            zoom_level: cfg.sidebar.default_zoom_level,
         },
         || {
             if let Some(state) = get_last_focused_window_state() {
@@ -286,6 +289,7 @@ pub fn get_sidebar_preference(is_first_window: bool) -> SidebarPreference {
                     open: sidebar.open,
                     width: sidebar.width,
                     show_all_files: sidebar.show_all_files,
+                    zoom_level: sidebar.zoom_level,
                 }
             } else {
                 let persisted = PersistedState::load();
@@ -293,40 +297,54 @@ pub fn get_sidebar_preference(is_first_window: bool) -> SidebarPreference {
                     open: persisted.sidebar_open,
                     width: persisted.sidebar_width,
                     show_all_files: persisted.sidebar_show_all_files,
+                    zoom_level: persisted.sidebar_zoom_level,
                 }
             }
         },
-    )
+    );
+    // Normalize zoom level to valid range with 0.1 step
+    SidebarPreference {
+        zoom_level: normalize_sidebar_zoom_level(pref.zoom_level),
+        ..pref
+    }
 }
 
-pub fn get_toc_preference(is_first_window: bool) -> TocPreference {
+pub fn get_right_sidebar_preference(is_first_window: bool) -> RightSidebarPreference {
     let cfg = CONFIG.read();
-    choose_by_behavior(
+    let pref = choose_by_behavior(
         is_first_window,
         cfg.right_sidebar.on_startup,
         cfg.right_sidebar.on_new_window,
-        || TocPreference {
+        || RightSidebarPreference {
             open: cfg.right_sidebar.default_open,
             width: cfg.right_sidebar.default_width,
             tab: cfg.right_sidebar.default_tab,
+            zoom_level: cfg.right_sidebar.default_zoom_level,
         },
         || {
             if let Some(state) = get_last_focused_window_state() {
-                TocPreference {
+                RightSidebarPreference {
                     open: *state.right_sidebar_open.read(),
                     width: *state.right_sidebar_width.read(),
                     tab: *state.right_sidebar_tab.read(),
+                    zoom_level: *state.right_sidebar_zoom_level.read(),
                 }
             } else {
                 let persisted = PersistedState::load();
-                TocPreference {
+                RightSidebarPreference {
                     open: persisted.right_sidebar_open,
                     width: persisted.right_sidebar_width,
                     tab: persisted.right_sidebar_tab,
+                    zoom_level: persisted.right_sidebar_zoom_level,
                 }
             }
         },
-    )
+    );
+    // Normalize zoom level to valid range with 0.1 step
+    RightSidebarPreference {
+        zoom_level: normalize_sidebar_zoom_level(pref.zoom_level),
+        ..pref
+    }
 }
 
 pub fn get_zoom_preference(is_first_window: bool) -> ZoomPreference {
@@ -430,9 +448,9 @@ mod tests {
     }
 
     #[test]
-    fn test_get_toc_preference_first_window() {
-        let result = get_toc_preference(true);
-        // Should return a TocPreference
+    fn test_get_right_sidebar_preference_first_window() {
+        let result = get_right_sidebar_preference(true);
+        // Should return a RightSidebarPreference
         assert!(result.width > 0.0);
         assert!(matches!(
             result.tab,
@@ -441,9 +459,9 @@ mod tests {
     }
 
     #[test]
-    fn test_get_toc_preference_new_window() {
-        let result = get_toc_preference(false);
-        // Should return a TocPreference
+    fn test_get_right_sidebar_preference_new_window() {
+        let result = get_right_sidebar_preference(false);
+        // Should return a RightSidebarPreference
         assert!(result.width > 0.0);
         assert!(matches!(
             result.tab,

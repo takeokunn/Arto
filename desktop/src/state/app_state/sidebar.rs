@@ -12,6 +12,7 @@ pub struct Sidebar {
     pub expanded_dirs: HashSet<PathBuf>,
     pub width: f64,
     pub show_all_files: bool,
+    pub zoom_level: f64,
     /// History of root directory navigation.
     ///
     /// This history is intentionally kept in-memory only and is not persisted
@@ -29,6 +30,7 @@ impl Default for Sidebar {
             expanded_dirs: HashSet::new(),
             width: 280.0,
             show_all_files: false,
+            zoom_level: 1.0,
             dir_history: HistoryManager::new(),
         }
     }
@@ -96,6 +98,7 @@ mod tests {
         assert!(!sidebar.open);
         assert_eq!(sidebar.width, 280.0);
         assert!(!sidebar.show_all_files);
+        assert_eq!(sidebar.zoom_level, 1.0);
         assert!(sidebar.expanded_dirs.is_empty());
     }
 
