@@ -67,12 +67,27 @@ class MathWindowController {
     } catch (error) {
       console.error("Failed to render math:", error);
       if (this.#contentContainer) {
-        this.#contentContainer.innerHTML = `
-          <div style="color: red; padding: 2rem;">
-            <strong>Rendering Error:</strong><br/>
-            <pre style="white-space: pre-wrap;">${error}</pre>
-          </div>
-        `;
+        this.#contentContainer.innerHTML = "";
+
+        const wrapper = document.createElement("div");
+        wrapper.style.color = "red";
+        wrapper.style.padding = "2rem";
+
+        const strong = document.createElement("strong");
+        strong.textContent = "Rendering Error:";
+
+        const lineBreak = document.createElement("br");
+
+        const pre = document.createElement("pre");
+        pre.style.whiteSpace = "pre-wrap";
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        pre.textContent = errorMessage;
+
+        wrapper.appendChild(strong);
+        wrapper.appendChild(lineBreak);
+        wrapper.appendChild(pre);
+
+        this.#contentContainer.appendChild(wrapper);
       }
     }
   }
@@ -273,11 +288,11 @@ class MathWindowController {
   }
 
   #updateZoomDisplay(): void {
-    // Update zoom level display via dioxus bridge
     const zoomPercent = Math.round(this.#state.scale * 100);
 
-    // Call global function to update Rust state
-    window.updateZoomLevel(zoomPercent);
+    if (typeof window.updateZoomLevel === "function") {
+      window.updateZoomLevel(zoomPercent);
+    }
   }
 }
 

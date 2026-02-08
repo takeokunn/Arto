@@ -165,6 +165,7 @@ async fn create_and_register_mermaid_window(
 pub fn open_or_focus_math_window(source: String, theme: Theme) {
     let math_id = generate_math_id(&source);
     let parent_id = window().id();
+    let window_key = format!("{parent_id:?}:{math_id}");
 
     // Check if window already exists and can be focused
     let needs_creation = CHILD_WINDOWS.with(|windows| {
@@ -174,11 +175,11 @@ pub fn open_or_focus_math_window(source: String, theme: Theme) {
             ChildWindowState::Created(entry) => entry.is_alive(),
         });
 
-        match windows.get(&math_id) {
+        match windows.get(&window_key) {
             Some(ChildWindowState::Created(entry)) => !entry.focus(),
             Some(ChildWindowState::Pending { .. }) => false,
             None => {
-                windows.insert(math_id.clone(), ChildWindowState::Pending { parent_id });
+                windows.insert(window_key.clone(), ChildWindowState::Pending { parent_id });
                 true
             }
         }
@@ -186,7 +187,7 @@ pub fn open_or_focus_math_window(source: String, theme: Theme) {
 
     if needs_creation {
         dioxus_core::spawn(create_and_register_math_window(
-            source, math_id, theme, parent_id,
+            source, math_id, window_key, theme, parent_id,
         ));
     }
 }
@@ -194,6 +195,7 @@ pub fn open_or_focus_math_window(source: String, theme: Theme) {
 async fn create_and_register_math_window(
     source: String,
     math_id: String,
+    window_key: String,
     theme: Theme,
     parent_id: WindowId,
 ) {
@@ -201,7 +203,7 @@ async fn create_and_register_math_window(
         MathWindow,
         MathWindowProps {
             source,
-            math_id: math_id.clone(),
+            math_id,
             theme,
         },
     );
@@ -219,7 +221,7 @@ async fn create_and_register_math_window(
 
     CHILD_WINDOWS.with(|windows| {
         windows.borrow_mut().insert(
-            math_id,
+            window_key,
             ChildWindowState::Created(ChildWindowEntry {
                 handle: weak_handle,
                 window_id,
