@@ -39,6 +39,7 @@ pub fn FileViewer(file: PathBuf) -> Element {
     use_file_watcher(file.clone(), reload_trigger, state);
     use_link_click_handler(file.clone(), state);
     use_mermaid_window_handler();
+    use_image_window_handler();
     use_context_menu_handler(file.clone(), base_dir);
 
     rsx! {
@@ -386,6 +387,78 @@ fn use_mermaid_window_handler() {
                             tracing::info!("Opening mermaid window for diagram");
                             crate::window::open_or_focus_mermaid_window(source.to_string(), theme);
                         }
+                    }
+                }
+            }
+        });
+    });
+}
+
+/// Hook to setup Image window open handler (click-to-open for images).
+/// Uses event delegation on `.markdown-body` -- same pattern as Mermaid click handler.
+fn use_image_window_handler() {
+    use_effect(|| {
+        let mut eval_provider = document::eval(indoc::indoc! {r#"
+            // Bridge function: JS -> Rust
+            window.handleImageWindowOpen = (src, alt, originalSrc) => {
+                dioxus.send({
+                    type: "open_image_window",
+                    src: originalSrc ? "" : src,
+                    alt: alt || "",
+                    originalSrc: originalSrc || null,
+                });
+            };
+
+            // Delegated click handler on .markdown-body for <img> elements
+            const markdownBody = document.querySelector(".markdown-body");
+            if (markdownBody) {
+                markdownBody.addEventListener("click", (event) => {
+                    // Left click only
+                    if (event.button !== 0) return;
+
+                    // Find the <img> element (could be the target or an ancestor)
+                    const img = event.target.closest ? event.target.closest("img") : null;
+                    if (!img) return;
+
+                    // Skip images inside links
+                    if (img.closest("a, .md-link")) return;
+
+                    // Skip if user is selecting text
+                    const selection = window.getSelection();
+                    if (selection && !selection.isCollapsed) return;
+
+                    event.preventDefault();
+                    window.handleImageWindowOpen(
+                        img.src,
+                        img.alt,
+                        img.dataset.originalSrc || null
+                    );
+                });
+            }
+        "#});
+
+        spawn(async move {
+            while let Ok(data) = eval_provider.recv::<serde_json::Value>().await {
+                if let Some(msg_type) = data.get("type").and_then(|v| v.as_str()) {
+                    if msg_type == "open_image_window" {
+                        let src = data.get("src").and_then(|v| v.as_str()).unwrap_or_default();
+                        let original_src = data
+                            .get("originalSrc")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        let state = use_context::<AppState>();
+                        let theme = *state.current_theme.read();
+                        let title = crate::components::image_window::extract_image_title(
+                            src,
+                            original_src.as_deref(),
+                        );
+                        tracing::info!("Opening image window for: {}", title);
+                        crate::window::open_or_focus_image_window(
+                            src.to_string(),
+                            original_src,
+                            theme,
+                            title,
+                        );
                     }
                 }
             }

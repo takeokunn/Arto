@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use crate::assets::MAIN_SCRIPT;
 use crate::components::icon::{Icon, IconName};
 use crate::components::theme_selector::ThemeSelector;
+use crate::components::viewer_hooks::use_zoom_update_handler;
 use crate::theme::Theme;
 
 /// Props for MermaidWindow component
@@ -123,27 +124,6 @@ fn use_viewer_script_loader(source: String, diagram_id: String) {
 
             if let Err(e) = eval_result.await {
                 tracing::error!("Failed to initialize mermaid window: {}", e);
-            }
-        });
-    });
-}
-
-/// Hook to listen for zoom updates from JavaScript
-fn use_zoom_update_handler(zoom_level: Signal<i32>) {
-    use_effect(move || {
-        let mut zoom_level = zoom_level;
-
-        spawn(async move {
-            let mut eval_provider = document::eval(indoc::indoc! {r#"
-                window.updateZoomLevel = (zoom) => {
-                    dioxus.send({ zoom: Math.round(zoom) });
-                };
-            "#});
-
-            while let Ok(data) = eval_provider.recv::<serde_json::Value>().await {
-                if let Some(zoom) = data.get("zoom").and_then(|v| v.as_i64()) {
-                    zoom_level.set(zoom as i32);
-                }
             }
         });
     });

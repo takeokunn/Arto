@@ -6,6 +6,7 @@
 //! - Downloading images from external URLs
 
 use base64::Engine;
+use std::path::Path;
 use std::time::Duration;
 
 /// Maximum allowed image size (20 MiB) to prevent memory exhaustion.
@@ -136,7 +137,7 @@ fn get_file_info_from_mime_type(
 /// - Request timeout to prevent indefinite hangs
 /// - Maximum content length check to prevent memory exhaustion
 /// - Content-type validation to ensure the response is an image
-fn download_image(url: &str) -> Result<(Vec<u8>, Option<String>), String> {
+pub fn download_image(url: &str) -> Result<(Vec<u8>, Option<String>), String> {
     use std::io::Read;
 
     let response = ureq::get(url)
@@ -281,6 +282,48 @@ pub fn extract_base64_from_data_url(data_url: &str) -> Result<&str, &'static str
     Ok(&data_url[comma_pos + 1..])
 }
 
+/// Infer MIME type from file extension.
+///
+/// Returns a MIME type string suitable for data URLs.
+/// Defaults to `"image/png"` for unknown extensions.
+pub fn get_mime_type_from_extension(path: &Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("svg") => "image/svg+xml",
+        Some("webp") => "image/webp",
+        Some("bmp") => "image/bmp",
+        Some("ico") => "image/x-icon",
+        _ => "image/png",
+    }
+}
+
+/// Convert a local file path to a base64-encoded data URL.
+///
+/// Reads the file from disk, determines the MIME type from the file extension,
+/// and returns a `data:` URL. This avoids sending large data URLs through IPC
+/// by reading the file on the Rust side.
+pub fn file_path_to_data_url(path: &str) -> Result<String, String> {
+    let file_path = std::path::Path::new(path);
+    let canonical = file_path
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
+    let metadata = std::fs::metadata(&canonical)
+        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    if metadata.len() > MAX_IMAGE_SIZE {
+        return Err(format!(
+            "Image file too large ({} bytes, max {} bytes)",
+            metadata.len(),
+            MAX_IMAGE_SIZE
+        ));
+    }
+    let data = std::fs::read(&canonical).map_err(|e| format!("Failed to read image: {}", e))?;
+    let mime_type = get_mime_type_from_extension(&canonical);
+    let base64 = base64::prelude::BASE64_STANDARD.encode(&data);
+    Ok(format!("data:{};base64,{}", mime_type, base64))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,5 +444,137 @@ mod tests {
             extract_extension_from_url("https://example.com/noext"),
             None
         );
+    }
+
+    #[test]
+    fn test_get_mime_type_from_extension() {
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.png")),
+            "image/png"
+        );
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.jpg")),
+            "image/jpeg"
+        );
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.jpeg")),
+            "image/jpeg"
+        );
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.gif")),
+            "image/gif"
+        );
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.svg")),
+            "image/svg+xml"
+        );
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.webp")),
+            "image/webp"
+        );
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.bmp")),
+            "image/bmp"
+        );
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.ico")),
+            "image/x-icon"
+        );
+        assert_eq!(
+            get_mime_type_from_extension(Path::new("test.unknown")),
+            "image/png"
+        );
+    }
+
+    #[test]
+    fn test_file_path_to_data_url() {
+        use std::io::Write;
+        let dir = tempfile::TempDir::new().unwrap();
+        let png_path = dir.path().join("test.png");
+        let mut f = std::fs::File::create(&png_path).unwrap();
+        f.write_all(&[0x89, 0x50, 0x4E, 0x47]).unwrap();
+
+        let result = file_path_to_data_url(png_path.to_str().unwrap());
+        assert!(result.is_ok());
+        let data_url = result.unwrap();
+        assert!(data_url.starts_with("data:image/png;base64,"));
+    }
+
+    #[test]
+    fn test_file_path_to_data_url_nonexistent() {
+        let result = file_path_to_data_url("/nonexistent/path/image.png");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_png() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(Some("image/png"));
+        assert_eq!(filter_name, "PNG Image");
+        assert_eq!(extensions, vec!["png"]);
+        assert_eq!(ext, "png");
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_jpeg() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(Some("image/jpeg"));
+        assert_eq!(filter_name, "JPEG Image");
+        assert_eq!(extensions, vec!["jpg", "jpeg"]);
+        assert_eq!(ext, "jpg");
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_gif() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(Some("image/gif"));
+        assert_eq!(filter_name, "GIF Image");
+        assert_eq!(extensions, vec!["gif"]);
+        assert_eq!(ext, "gif");
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_svg() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(Some("image/svg+xml"));
+        assert_eq!(filter_name, "SVG Image");
+        assert_eq!(extensions, vec!["svg"]);
+        assert_eq!(ext, "svg");
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_webp() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(Some("image/webp"));
+        assert_eq!(filter_name, "WebP Image");
+        assert_eq!(extensions, vec!["webp"]);
+        assert_eq!(ext, "webp");
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_bmp() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(Some("image/bmp"));
+        assert_eq!(filter_name, "BMP Image");
+        assert_eq!(extensions, vec!["bmp"]);
+        assert_eq!(ext, "bmp");
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_none() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(None);
+        assert_eq!(filter_name, "Image");
+        assert_eq!(extensions, vec!["png", "jpg", "gif", "webp"]);
+        assert_eq!(ext, "png");
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_unknown() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(Some("image/tiff"));
+        assert_eq!(filter_name, "Image");
+        assert_eq!(extensions, vec!["png", "jpg", "gif", "webp"]);
+        assert_eq!(ext, "png");
+    }
+
+    #[test]
+    fn test_get_file_info_from_mime_type_x_icon() {
+        let (filter_name, extensions, ext) = get_file_info_from_mime_type(Some("image/x-icon"));
+        assert_eq!(filter_name, "Image");
+        assert_eq!(extensions, vec!["png", "jpg", "gif", "webp"]);
+        assert_eq!(ext, "png");
     }
 }

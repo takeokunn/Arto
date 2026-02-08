@@ -6,7 +6,7 @@
 export type ContentContextType =
   | { type: "general" }
   | { type: "link"; href: string }
-  | { type: "image"; src: string; alt: string | null }
+  | { type: "image"; src: string; alt: string | null; original_src: string | null }
   | { type: "code_block"; content: string; language: string | null }
   | { type: "mermaid"; source: string }
   | { type: "math_block"; source: string };
@@ -271,7 +271,12 @@ function detectContext(target: HTMLElement): DetectedContext {
       // Image is inline within <p data-source-line="N">, use parent's line
       const line = findSourceLine(current);
       return {
-        context: { type: "image", src: img.src, alt: img.alt || null },
+        context: {
+          type: "image",
+          src: img.dataset.originalSrc ? "" : img.src,
+          alt: img.alt || null,
+          original_src: img.dataset.originalSrc || null,
+        },
         sourceLine: line,
         sourceLineEnd: line,
       };

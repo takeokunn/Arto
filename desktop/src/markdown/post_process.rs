@@ -6,16 +6,7 @@ use super::headings::HeadingInfo;
 
 /// Infer MIME type from file extension
 pub(super) fn get_mime_type(path: &Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("svg") => "image/svg+xml",
-        Some("webp") => "image/webp",
-        Some("bmp") => "image/bmp",
-        Some("ico") => "image/x-icon",
-        _ => "image/png", // Default
-    }
+    crate::utils::image::get_mime_type_from_extension(path)
 }
 
 /// Post-process HTML to handle img, anchor, and table tags using lol_html
@@ -56,6 +47,10 @@ pub(super) fn post_process_html_tags(
                                     let base64_data = general_purpose::STANDARD.encode(&image_data);
                                     let data_url =
                                         format!("data:{};base64,{}", mime_type, base64_data);
+                                    el.set_attribute(
+                                        "data-original-src",
+                                        &canonical_path.to_string_lossy(),
+                                    )?;
                                     el.set_attribute("src", &data_url)?;
                                 }
                             }
@@ -155,6 +150,10 @@ pub(super) fn post_process_html_with_headings(
                                     let base64_data = general_purpose::STANDARD.encode(&image_data);
                                     let data_url =
                                         format!("data:{};base64,{}", mime_type, base64_data);
+                                    el.set_attribute(
+                                        "data-original-src",
+                                        &canonical_path.to_string_lossy(),
+                                    )?;
                                     el.set_attribute("src", &data_url)?;
                                 }
                             }
@@ -240,6 +239,10 @@ mod tests {
         assert!(
             !result.contains(r#"src="test.png""#),
             "Should not contain original path"
+        );
+        assert!(
+            result.contains("data-original-src="),
+            "Should preserve original path in data-original-src attribute"
         );
     }
 
@@ -378,6 +381,40 @@ mod tests {
         assert!(
             result.contains("Title"),
             "Should still render heading text: {result}"
+        );
+    }
+
+    #[test]
+    fn test_data_original_src_not_set_for_http() {
+        let html = indoc::indoc! {r#"
+            <p><img src="https://example.com/image.png" alt="remote" /></p>
+        "#};
+        let result = post_process_html_tags(html, Path::new("."), &[]);
+
+        assert!(
+            !result.contains("data-original-src"),
+            "HTTP image URLs should NOT receive a data-original-src attribute"
+        );
+        assert!(
+            result.contains(r#"src="https://example.com/image.png""#),
+            "HTTP image URL should be preserved as-is"
+        );
+    }
+
+    #[test]
+    fn test_data_original_src_not_set_for_data_urls() {
+        let html = indoc::indoc! {r#"
+            <p><img src="data:image/png;base64,iVBORw0KGgo=" alt="embedded" /></p>
+        "#};
+        let result = post_process_html_tags(html, Path::new("."), &[]);
+
+        assert!(
+            !result.contains("data-original-src"),
+            "Data URL images should NOT receive a data-original-src attribute"
+        );
+        assert!(
+            result.contains("data:image/png;base64,iVBORw0KGgo="),
+            "Data URL should be preserved as-is in the src attribute"
         );
     }
 }

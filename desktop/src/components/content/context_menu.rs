@@ -14,7 +14,11 @@ pub enum ContentContext {
     /// Link element
     Link { href: String },
     /// Image element
-    Image { src: String, alt: Option<String> },
+    Image {
+        src: String,
+        alt: Option<String>,
+        original_src: Option<String>,
+    },
     /// Code block
     CodeBlock {
         content: String,
@@ -194,9 +198,10 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                         on_close: props.on_close,
                     }
                 },
-                ContentContext::Image { src, .. } => rsx! {
+                ContentContext::Image { src, original_src, .. } => rsx! {
                     ImageContextItems {
                         src: src.clone(),
+                        original_src: original_src.clone(),
                         on_close: props.on_close,
                     }
                 },
@@ -206,9 +211,7 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
     }
 }
 
-// ============================================================================
-// Helper Components
-// ============================================================================
+// --- Helper Components ---
 
 #[derive(Props, Clone, PartialEq)]
 struct ContextMenuItemProps {
@@ -258,9 +261,7 @@ fn ContextMenuSeparator() -> Element {
     }
 }
 
-// ============================================================================
-// Context-Specific Menu Items
-// ============================================================================
+// --- Context-Specific Menu Items ---
 
 #[component]
 fn LinkContextItems(href: String, base_dir: PathBuf, on_close: EventHandler<()>) -> Element {
@@ -314,16 +315,49 @@ fn LinkContextItems(href: String, base_dir: PathBuf, on_close: EventHandler<()>)
 }
 
 #[component]
-fn ImageContextItems(src: String, on_close: EventHandler<()>) -> Element {
+fn ImageContextItems(
+    src: String,
+    original_src: Option<String>,
+    on_close: EventHandler<()>,
+) -> Element {
+    let state = use_context::<AppState>();
+
     rsx! {
+        ContextMenuItem {
+            label: "Open in Image Viewer",
+            icon: Some(IconName::Eye),
+            on_click: {
+                let src = src.clone();
+                let original_src = original_src.clone();
+                let on_close = on_close;
+                move |_| {
+                    let theme = *state.current_theme.read();
+                    let title = crate::components::image_window::extract_image_title(
+                        &src,
+                        original_src.as_deref(),
+                    );
+                    crate::window::open_or_focus_image_window(
+                        src.clone(),
+                        original_src.clone(),
+                        theme,
+                        title,
+                    );
+                    on_close.call(());
+                }
+            },
+        }
+
         ContextMenuItem {
             label: "Copy Image",
             icon: Some(IconName::Photo),
             on_click: {
                 let src = src.clone();
+                let original_src = original_src.clone();
                 let on_close = on_close;
                 move |_| {
-                    crate::utils::clipboard::copy_image_from_data_url(&src);
+                    // Resolve effective src lazily: convert local file path to data URL on demand
+                    let effective_src = resolve_effective_src(&src, original_src.as_deref());
+                    crate::utils::clipboard::copy_image(&effective_src);
                     on_close.call(());
                 }
             },
@@ -334,12 +368,15 @@ fn ImageContextItems(src: String, on_close: EventHandler<()>) -> Element {
             icon: Some(IconName::Download),
             on_click: {
                 let src = src.clone();
+                let original_src = original_src.clone();
                 let on_close = on_close;
                 move |_| {
-                    // Run in background thread to prevent UI blocking during HTTP download
+                    // Run in background thread to prevent UI blocking during file I/O or HTTP download
                     let src = src.clone();
+                    let original_src = original_src.clone();
                     std::thread::spawn(move || {
-                        crate::utils::image::save_image(&src);
+                        let effective_src = resolve_effective_src(&src, original_src.as_deref());
+                        crate::utils::image::save_image(&effective_src);
                     });
                     on_close.call(());
                 }
@@ -350,11 +387,10 @@ fn ImageContextItems(src: String, on_close: EventHandler<()>) -> Element {
             label: "Copy Image Path",
             icon: Some(IconName::Copy),
             on_click: {
-                let src = src.clone();
+                let path = original_src.clone().unwrap_or_else(|| src.clone());
                 let on_close = on_close;
                 move |_| {
-                    // For data URLs, just copy the src (or original path if available)
-                    crate::utils::clipboard::copy_text(&src);
+                    crate::utils::clipboard::copy_text(&path);
                     on_close.call(());
                 }
             },
@@ -420,5 +456,21 @@ fn CopyPathItems(
                 }
             }
         }
+    }
+}
+
+/// Resolve the effective image source for save/copy operations.
+/// When src is empty and original_src (local file path) is available,
+/// convert it to a data URL. This is called lazily in click handlers
+/// to avoid file I/O during context menu rendering.
+fn resolve_effective_src(src: &str, original_src: Option<&str>) -> String {
+    if src.is_empty() {
+        if let Some(path) = original_src {
+            crate::utils::image::file_path_to_data_url(path).unwrap_or_default()
+        } else {
+            String::new()
+        }
+    } else {
+        src.to_string()
     }
 }

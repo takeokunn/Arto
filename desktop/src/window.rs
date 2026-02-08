@@ -8,9 +8,7 @@ mod types;
 
 use std::sync::OnceLock;
 
-// ============================================================================
-// Offset type
-// ============================================================================
+// --- Offset type ---
 
 /// A 2D offset representing x and y coordinates
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -27,9 +25,7 @@ impl Offset {
     }
 }
 
-// ============================================================================
-// Chrome Inset (window frame offset)
-// ============================================================================
+// --- Chrome Inset (window frame offset) ---
 
 /// Window chrome inset (title bar height, window borders)
 ///
@@ -49,7 +45,7 @@ pub fn get_chrome_inset() -> Offset {
 
 pub use child::{
     close_child_windows_for_last_focused, close_child_windows_for_parent,
-    open_or_focus_mermaid_window,
+    open_or_focus_image_window, open_or_focus_mermaid_window,
 };
 pub use main::{
     close_all_main_windows, create_main_window_config, create_main_window_sync,

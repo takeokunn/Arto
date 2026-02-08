@@ -83,3 +83,4 @@ export function init(): void {
 
 // Re-export mermaid window functions
 export { initMermaidWindow } from "./mermaid-window-controller";
+export { initImageWindow } from "./image-window-controller";
