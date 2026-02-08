@@ -1,4 +1,16 @@
 import katex from "katex";
+import { openMathWindow } from "./math-window-controller";
+
+/** Add click handler to open Math Window for a math element */
+function addMathClickHandler(element: HTMLElement): void {
+  element.style.cursor = "pointer";
+  element.addEventListener("click", () => {
+    const source = element.dataset.originalContent || "";
+    if (source) {
+      openMathWindow(source);
+    }
+  });
+}
 
 export function renderMath(container: Element): void {
   renderInlineMath(container);
@@ -75,6 +87,8 @@ function renderDisplayMath(container: Element): void {
       });
       element.innerHTML = html;
       element.setAttribute("data-katex-rendered", "true");
+
+      addMathClickHandler(element);
     } catch (error) {
       console.error("Failed to render display math:", error);
       element.style.color = "red";
@@ -116,6 +130,8 @@ function renderBlockMath(container: Element): void {
       });
       element.innerHTML = html;
       element.dataset.rendered = "true";
+
+      addMathClickHandler(element);
     } catch (error) {
       console.error("Failed to render math block:", error);
       element.style.color = "red";

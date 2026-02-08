@@ -35,3 +35,21 @@ pub(crate) fn build_mermaid_window_index(theme: Theme) -> String {
     </html>
     "#}
 }
+
+pub(crate) fn build_math_window_index(theme: Theme) -> String {
+    let resolved = resolve_theme(theme);
+    indoc::formatdoc! {r#"
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <title>Math Viewer - Arto</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <!-- CUSTOM HEAD -->
+        </head>
+        <body data-theme="{resolved}" class="math-window-body">
+            <div id="main"></div>
+            <!-- MODULE LOADER -->
+        </body>
+    </html>
+    "#}
+}

@@ -39,6 +39,7 @@ pub fn FileViewer(file: PathBuf) -> Element {
     use_file_watcher(file.clone(), reload_trigger, state);
     use_link_click_handler(file.clone(), state);
     use_mermaid_window_handler();
+    use_math_window_handler();
     use_context_menu_handler(file.clone(), base_dir);
 
     rsx! {
@@ -385,6 +386,32 @@ fn use_mermaid_window_handler() {
                             let theme = *state.current_theme.read();
                             tracing::info!("Opening mermaid window for diagram");
                             crate::window::open_or_focus_mermaid_window(source.to_string(), theme);
+                        }
+                    }
+                }
+            }
+        });
+    });
+}
+
+/// Hook to setup Math window open handler
+fn use_math_window_handler() {
+    use_effect(|| {
+        let mut eval_provider = document::eval(indoc::indoc! {r#"
+            window.handleMathWindowOpen = (source) => {
+                dioxus.send({ type: "open_math_window", source: source });
+            };
+        "#});
+
+        spawn(async move {
+            while let Ok(data) = eval_provider.recv::<serde_json::Value>().await {
+                if let Some(msg_type) = data.get("type").and_then(|v| v.as_str()) {
+                    if msg_type == "open_math_window" {
+                        if let Some(source) = data.get("source").and_then(|v| v.as_str()) {
+                            let state = use_context::<AppState>();
+                            let theme = *state.current_theme.read();
+                            tracing::info!("Opening math window for expression");
+                            crate::window::open_or_focus_math_window(source.to_string(), theme);
                         }
                     }
                 }

@@ -4,6 +4,7 @@ pub mod content;
 pub mod header;
 pub mod icon;
 pub mod main_app;
+pub mod math_window;
 pub mod mermaid_window;
 pub mod pinned_chips;
 pub mod right_sidebar;

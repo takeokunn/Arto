@@ -22,6 +22,8 @@ pub enum ContentContext {
     },
     /// Mermaid diagram
     Mermaid { source: String },
+    /// Math expression
+    Math { source: String },
 }
 
 /// Context menu data from JavaScript
@@ -167,15 +169,21 @@ pub fn ContentContextMenu(props: ContentContextMenuProps) -> Element {
                         on_close: props.on_close,
                     }
                 },
+                ContentContext::Math { source } => rsx! {
+                    MathContextItems {
+                        source: source.clone(),
+                        on_close: props.on_close,
+                    }
+                },
                 ContentContext::General => rsx! {},
             }
         }
     }
 }
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // Helper Components
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 #[derive(Props, Clone, PartialEq)]
 struct ContextMenuItemProps {
@@ -224,9 +232,9 @@ fn ContextMenuSeparator() -> Element {
     }
 }
 
-// ============================================================================
+// ---------------------------------------------------------------------------
 // Context-Specific Menu Items
-// ============================================================================
+// ---------------------------------------------------------------------------
 
 #[component]
 fn LinkContextItems(href: String, base_dir: PathBuf, on_close: EventHandler<()>) -> Element {
@@ -351,6 +359,40 @@ fn MermaidContextItems(source: String, on_close: EventHandler<()>) -> Element {
     rsx! {
         ContextMenuItem {
             label: "Copy Code",
+            icon: Some(IconName::Copy),
+            on_click: {
+                let source = source.clone();
+                let on_close = on_close;
+                move |_| {
+                    crate::utils::clipboard::copy_text(&source);
+                    on_close.call(());
+                }
+            },
+        }
+    }
+}
+
+#[component]
+fn MathContextItems(source: String, on_close: EventHandler<()>) -> Element {
+    let state = use_context::<AppState>();
+
+    rsx! {
+        ContextMenuItem {
+            label: "Open in Math Viewer",
+            icon: Some(IconName::ExternalLink),
+            on_click: {
+                let source = source.clone();
+                let on_close = on_close;
+                move |_| {
+                    let theme = *state.current_theme.read();
+                    crate::window::open_or_focus_math_window(source.clone(), theme);
+                    on_close.call(());
+                }
+            },
+        }
+
+        ContextMenuItem {
+            label: "Copy LaTeX Source",
             icon: Some(IconName::Copy),
             on_click: {
                 let source = source.clone();

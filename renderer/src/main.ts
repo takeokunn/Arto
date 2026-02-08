@@ -83,3 +83,6 @@ export function init(): void {
 
 // Re-export mermaid window functions
 export { initMermaidWindow } from "./mermaid-window-controller";
+
+// Re-export math window functions
+export { initMathWindow } from "./math-window-controller";

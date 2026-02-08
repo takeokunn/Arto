@@ -6,10 +6,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::assets::MAIN_STYLE;
+use crate::components::math_window::{generate_math_id, MathWindow, MathWindowProps};
 use crate::components::mermaid_window::{generate_diagram_id, MermaidWindow, MermaidWindowProps};
 use crate::theme::Theme;
 
-use super::index::build_mermaid_window_index;
+use super::index::{build_math_window_index, build_mermaid_window_index};
 use super::main::get_last_focused_window;
 
 struct ChildWindowEntry {
@@ -152,6 +153,73 @@ async fn create_and_register_mermaid_window(
     CHILD_WINDOWS.with(|windows| {
         windows.borrow_mut().insert(
             diagram_id,
+            ChildWindowState::Created(ChildWindowEntry {
+                handle: weak_handle,
+                window_id,
+                parent_id,
+            }),
+        );
+    });
+}
+
+pub fn open_or_focus_math_window(source: String, theme: Theme) {
+    let math_id = generate_math_id(&source);
+    let parent_id = window().id();
+
+    // Check if window already exists and can be focused
+    let needs_creation = CHILD_WINDOWS.with(|windows| {
+        let mut windows = windows.borrow_mut();
+        windows.retain(|_, state| match state {
+            ChildWindowState::Pending { .. } => true,
+            ChildWindowState::Created(entry) => entry.is_alive(),
+        });
+
+        match windows.get(&math_id) {
+            Some(ChildWindowState::Created(entry)) => !entry.focus(),
+            Some(ChildWindowState::Pending { .. }) => false,
+            None => {
+                windows.insert(math_id.clone(), ChildWindowState::Pending { parent_id });
+                true
+            }
+        }
+    });
+
+    if needs_creation {
+        dioxus_core::spawn(create_and_register_math_window(
+            source, math_id, theme, parent_id,
+        ));
+    }
+}
+
+async fn create_and_register_math_window(
+    source: String,
+    math_id: String,
+    theme: Theme,
+    parent_id: WindowId,
+) {
+    let dom = VirtualDom::new_with_props(
+        MathWindow,
+        MathWindowProps {
+            source,
+            math_id: math_id.clone(),
+            theme,
+        },
+    );
+
+    let config = Config::new()
+        .with_menu(None)
+        .with_window(WindowBuilder::new().with_title("Math Viewer"))
+        .with_custom_head(indoc::formatdoc! {r#"<link rel="stylesheet" href="{MAIN_STYLE}">"#})
+        .with_custom_index(build_math_window_index(theme));
+
+    let pending = window().new_window(dom, config);
+    let ctx = pending.await;
+    let weak_handle = std::rc::Rc::downgrade(&ctx);
+    let window_id = ctx.window.id();
+
+    CHILD_WINDOWS.with(|windows| {
+        windows.borrow_mut().insert(
+            math_id,
             ChildWindowState::Created(ChildWindowEntry {
                 handle: weak_handle,
                 window_id,

@@ -8,7 +8,8 @@ export type ContentContextType =
   | { type: "link"; href: string }
   | { type: "image"; src: string; alt: string | null }
   | { type: "code_block"; content: string; language: string | null }
-  | { type: "mermaid"; source: string };
+  | { type: "mermaid"; source: string }
+  | { type: "math"; source: string };
 
 export interface ContextMenuData {
   context: ContentContextType;
@@ -25,6 +26,16 @@ function detectContext(target: HTMLElement): ContentContextType {
   let current: HTMLElement | null = target;
 
   while (current && !current.classList.contains("markdown-body")) {
+    // Check for math expression (all 3 types: code-block, display, inline)
+    if (
+      current.classList.contains("preprocessed-math") ||
+      current.classList.contains("preprocessed-math-display") ||
+      current.classList.contains("preprocessed-math-inline")
+    ) {
+      const source = current.dataset.originalContent || "";
+      return { type: "math", source };
+    }
+
     // Check for mermaid diagram
     if (current.classList.contains("preprocessed-mermaid")) {
       // Source is stored in data-original-content attribute
