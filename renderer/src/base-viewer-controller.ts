@@ -211,6 +211,6 @@ export abstract class BaseViewerController {
 
 declare global {
   interface Window {
-    updateZoomLevel: (zoomPercent: number) => void;
+    updateZoomLevel?: (zoomPercent: number) => void;
   }
 }

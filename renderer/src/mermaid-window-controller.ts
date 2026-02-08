@@ -9,7 +9,7 @@ import {
   findSvgElement,
   getSvgDimensions,
 } from "./code-copy";
-import { BaseViewerController } from "./base-viewer-controller.ts";
+import { BaseViewerController } from "./base-viewer-controller";
 
 class MermaidWindowController extends BaseViewerController {
   async init(source: string, diagramId: string): Promise<void> {

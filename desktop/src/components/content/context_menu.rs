@@ -466,7 +466,16 @@ fn CopyPathItems(
 fn resolve_effective_src(src: &str, original_src: Option<&str>) -> String {
     if src.is_empty() {
         if let Some(path) = original_src {
-            crate::utils::image::file_path_to_data_url(path).unwrap_or_default()
+            match crate::utils::image::file_path_to_data_url(path) {
+                Ok(data_url) => data_url,
+                Err(err) => {
+                    eprintln!(
+                        "Failed to convert image file '{}' to data URL in resolve_effective_src: {}",
+                        path, err
+                    );
+                    path.to_string()
+                }
+            }
         } else {
             String::new()
         }

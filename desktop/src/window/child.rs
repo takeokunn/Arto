@@ -212,8 +212,17 @@ async fn create_and_register_image_window(
     let window_title = title.clone();
 
     // Resolve the image data URL: prefer reading from disk for local images
+    const FALLBACK_IMAGE_DATA_URL: &str =
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
     let image_data_url = if let Some(ref path) = original_src {
-        crate::utils::image::file_path_to_data_url(path).unwrap_or(src)
+        match crate::utils::image::file_path_to_data_url(path) {
+            Ok(url) if !url.is_empty() => url,
+            _ if !src.is_empty() => src,
+            _ => FALLBACK_IMAGE_DATA_URL.to_string(),
+        }
+    } else if src.is_empty() {
+        FALLBACK_IMAGE_DATA_URL.to_string()
     } else {
         src
     };

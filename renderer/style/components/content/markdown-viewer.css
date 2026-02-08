@@ -33,12 +33,21 @@
 
 
     /* Make images clickable (opens in Image Viewer) */
-    img:not(a img) {
+    img {
       cursor: pointer;
       transition: opacity var(--transition-fast);
 
       &:hover {
         opacity: 0.85;
+      }
+    }
+
+    /* Disable clickable style for linked images */
+    a img {
+      cursor: default;
+
+      &:hover {
+        opacity: 1;
       }
     }
   }

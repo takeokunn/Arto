@@ -39,7 +39,7 @@ pub(crate) fn build_mermaid_window_index(theme: Theme) -> String {
 pub(crate) fn build_image_window_index(theme: Theme, image_data_url: &str) -> String {
     let resolved = resolve_theme(theme);
     // Use serde_json for safe JS string escaping
-    let escaped_data_url = serde_json::to_string(image_data_url).unwrap_or_default();
+    let escaped_data_url = serde_json::to_string(image_data_url).unwrap();
     indoc::formatdoc! {r#"
     <!DOCTYPE html>
     <html>

@@ -1,4 +1,4 @@
-import { BaseViewerController } from "./base-viewer-controller.ts";
+import { BaseViewerController } from "./base-viewer-controller";
 
 class ImageWindowController extends BaseViewerController {
   #imgElement: HTMLImageElement | null = null;
@@ -41,7 +41,16 @@ class ImageWindowController extends BaseViewerController {
 
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
-      img.onerror = () => reject(new Error("Failed to load image"));
+      img.onerror = () => {
+        if (this.contentContainer) {
+          this.contentContainer.innerHTML = `
+            <div style="color: var(--text-secondary); padding: 2rem; text-align: center;">
+              <strong>Failed to load image</strong>
+            </div>
+          `;
+        }
+        reject(new Error("Failed to load image"));
+      };
       img.src = src;
     });
 
